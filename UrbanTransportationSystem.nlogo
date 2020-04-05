@@ -1,31 +1,32 @@
-breed [citizens          citizen]
-breed [mapping-citizens  mapping-citizen]
+;; 定义海龟种类 其中，mapping-<xx>为视图，用于连接顶点
+breed [citizens          citizen] ;; 居民
+breed [mapping-citizens  mapping-citizen] ;; mapping-citizens为交通工具？
 breed [buses             bus]
 breed [mapping-buses     mapping-bus]
 breed [taxies            taxi]
 breed [mapping-taxies    mapping-taxi]
-breed [vertices          vertex]               ;; Graph Algorithm
-undirected-link-breed [edges       edge]       ;; Graph Algorithm
-undirected-link-breed [map-links   map-link]   ;; link between controller and entity
-undirected-link-breed [bus-links   bus-link]   ;; link between bus and passenger
+breed [vertices          vertex]               ;; Graph Algorithm 用于查找最短路径的迪杰斯特拉算法：顶点集合
+undirected-link-breed [edges       edge]       ;; Graph Algorithm 用于查找最短路径的迪杰斯特拉算法：边集
+undirected-link-breed [map-links   map-link]   ;; link between controller and entity ;; 无向链，link model agent with view agent
+undirected-link-breed [bus-links   bus-link]   ;; link between bus(vehicle) and passenger
 undirected-link-breed [taxi-links  taxi-link]  ;; link between taxi and passenger
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Variables
+;; Variables 全局变量
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 globals[
   ;;  configuration
-  district-width
-  district-length
-;  initial-people-num
-  company-capacity
-  residence-capacity
+  district-width ;; 区域宽度
+  district-length ;; 区域长度
+;  initial-people-num 由滑块控制
+  company-capacity ;; 一个公司的人数
+  residence-capacity ;; 一个住所的人数
   bus-capacity
   ;;  interaction
-  mouse-was-down?
+  mouse-was-down? ;; 鼠标点击事件
   ;;  time control
-;  traffic-light-cycle
+;  traffic-light-cycle 由滑块控制
   traffic-light-count
   ;;  transportation
   person-speed             ;;  person
@@ -38,18 +39,18 @@ globals[
   taxi-duration            ;;  taxi: wait
   buffer-distance          ;;  safe distance to the car ahead
   ;;  game parameter
-  money
-  ;;  patch-set
+  money ;; 所有人的金钱总量？
+  ;;  patch-set patch主体集合
   roads
   intersections
-  idle-estates
-  residence-district
-  company-district
+  idle-estates ;; 闲置地产（就是除了land（棕色）之外没人住的地方）
+  residence-district ;; 住所区域
+  company-district ;; 公司区域
   residences
   companies
   ;;  patch
-  global-origin-station
-  global-terminal-station
+  global-origin-station ;; 源点O
+  global-terminal-station ;; 终端点D
   ;;  Analysis
   average-taxi-carring-rate-list
   average-commuting-time-list
@@ -60,37 +61,39 @@ citizens-own[
   ;;  basic
   residence
   company
-  has-car?
+  has-car? ;; 布尔型变量，是否有车
   ;;  game
-  earning-power
+  earning-power ;; 赚钱能力？
   ;;  transportation
   trip-mode                ;;  1: take car, 2: take bus, 3: take taxi
-  path
+  path ;;一个路径list，由寻路方法获得
   max-speed
   ;; round
   speed
   advance-distance
-  still?
-  time
+  still? ;;是否静止，布尔型变量
+  time ;; ??
   ;; trip
-  last-commuting-time
-  commuting-counter
+  last-commuting-time ;; ??
+  commuting-counter ;; 居民走了多少时间，每次tick时加1
 ]
 
+;; 传统出租车
 taxies-own [
   ;;  transportation
   trip-mode                ;;  4: taxi
   path
   max-speed
   ;;  round
-  is-ordered?
-  is-occupied?
+  is-ordered? ;; 是否被预定
+  is-occupied? ;; 是否有乘客
   speed
   advance-distance
-  still?
+  still? ;; 是否静止，布尔型变量
   time
 ]
 
+;; 公交车
 buses-own [
   ;;  basic
   origin-station           ;;  vertex
@@ -100,27 +103,27 @@ buses-own [
   path
   max-speed
   ;;  round
-  num-of-passengers
+  num-of-passengers ;; 车上乘客数
   speed
   advance-distance
   still?
-  time
+  time ;; ??
 ]
 
 patches-own[
-  land-type                ;;  land, road, bus-stop, residence, company, idle-estate
-  intersection?
-  num                      ;;  land-type = "residence" or "company"
+  land-type                ;; 字符串变量，  land, road, bus-stop, residence, company, idle-estate
+  intersection?            ;; 是否为交叉口
+  num                      ;;  land-type = "residence" 时，num为该住所人数；为 "company"时，land-type为该公司容量,都不是时为0
 ]
 
 vertices-own [
-  weight
-  predecessor
+  weight ;; 权重
+  predecessor ;;该顶点前驱
 ]
 
 edges-own [
-  bus-route?
-  cost
+  bus-route? ;; 是否为公交线路
+  cost ;; 代价
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -138,20 +141,22 @@ to setup
   reset-ticks
 end
 
+;; 配置设置
 to setup-config
   set district-width       7
   set district-length      7
-;  set initial-people-num   80
-  set company-capacity     5
-  set residence-capacity   1
-  set bus-capacity         4
+;  set initial-people-num   80 ;; 设置滑块的值为80
+  set company-capacity     5 ;; 一个公司的人数
+  set residence-capacity   1 ;; 住所人数
+  set bus-capacity         4 ;; 公交人数
   set mouse-was-down?      false
 ;  set traffic-light-cycle  10
-  set traffic-light-count  traffic-light-cycle
+  set traffic-light-count  traffic-light-cycle ;; traffic-light-count为倒计时，当为零时改变相位，初始时设置为周期
 end
 
 to setup-globals
-  set person-speed         0.05
+  ;; speed：相对于砖块
+  set person-speed         0.10
   set car-speed            0.99
   set bus-speed            0.49
   set acceleration         0.25
@@ -159,7 +164,7 @@ to setup-globals
   set event-duration       50
   set bus-duration         2
   set taxi-duration        2
-  set buffer-distance      1.0
+  set buffer-distance      1.0 ;; 缓冲距离为一个砖块
   set money                0
 end
 
@@ -169,29 +174,31 @@ to setup-patches
   ]
   ;;  roads
   ask patches with [
-    pxcor mod (district-width + 1) = 0 or pycor mod (district-length + 1) = 0
+    pxcor mod (district-width + 1) = 0 or pycor mod (district-length + 1) = 0 ;; 一个区域的长、宽外设置为road，占1个patch
   ][
     set land-type "road"
-    set pcolor gray + 4
+    set pcolor gray + 4 ;; 道路颜色为接近白色
   ]
-  set roads patches with [land-type = "road"]
+  set roads patches with [land-type = "road"] ;; 将land-type为road的patches设置为road种类
   ;;  intersections
   ask patches with [
     pxcor mod (district-width + 1) = 0 and pycor mod (district-length + 1) = 0
   ][
-    set intersection? true
+    set intersection? true ;; 设置交叉口属性
   ]
   set intersections patches with [intersection? = true]
   ;;  traffic lights
   ask intersections [
+    ;; 为每个intersection的相邻patches设置名称
     let right-patch patch-at  1  0
     let left-patch  patch-at -1  0
     let up-patch    patch-at  0  1
     let down-patch  patch-at  0 -1
-    if right-patch != nobody [ ask right-patch [set pcolor green] ]
-    if left-patch  != nobody [ ask left-patch  [set pcolor green] ]
-    if up-patch    != nobody [ ask up-patch    [set pcolor red  ] ]
-    if down-patch  != nobody [ ask down-patch  [set pcolor red  ] ]
+    ;; 若存在则设置颜色
+    if right-patch != nobody [ ask right-patch [set pcolor 69] ]
+    if left-patch  != nobody [ ask left-patch  [set pcolor 69] ]
+    if up-patch    != nobody [ ask up-patch    [set pcolor 19  ] ]
+    if down-patch  != nobody [ ask down-patch  [set pcolor 19  ] ]
   ]
   ;;  land
   ask patches with [land-type != "road"][
@@ -205,10 +212,10 @@ to setup-patches
     set land-type "idle-estate"
     set pcolor brown + 3
   ]
-  set idle-estates patch-set patches with [land-type = "idle-estate"]
-  ;;  residence-district
+  set idle-estates patch-set patches with [land-type = "idle-estate"] ;; patch-set 返回包含所有输入瓦片的主体集合
+  ;;  residence-district 居住区域（注意不是住所）
   set residence-district patch-set patches with [
-    ((pxcor > max-pxcor / 2) or (pxcor < (- max-pxcor / 2)) or
+    ((pxcor > max-pxcor / 2) or (pxcor < (- max-pxcor / 2)) or        ;;
     (pycor > max-pycor / 2) or (pycor < (- max-pycor / 2))) and
     (land-type = "idle-estate")
   ]
@@ -221,16 +228,17 @@ to setup-patches
 end
 
 to setup-estates
+  ;; 向下取整，得到住所和公司的数目
   let residence-num ceiling(initial-people-num / residence-capacity)
   let company-num   ceiling(initial-people-num / company-capacity  )
   ;;  residences
   ask n-of residence-num residence-district[
-    set land-type "residence"
+    set land-type "residence" ;; 随机选择住所区域的patch变为住所
   ]
-  set residences patch-set patches with [land-type = "residence"]
+  set residences patch-set patches with [land-type = "residence"] ;; 设置breed
   ask residences [
     set pcolor yellow
-    set num 0
+    set num 0 ;; num是一个标记，0代表residence，1代表company
   ]
   ;;  companies
   ask n-of company-num company-district[
@@ -238,14 +246,15 @@ to setup-estates
   ]
   set companies patch-set patches with [land-type = "company"]
   ask companies [
-    set pcolor blue
+    set pcolor red  ;; 通常用红色表示商业用地！！
     set num 0
   ]
 end
 
+;; 由setup-map、setup-citizen、add-citizen调用，生成边
 to setup-graph
-  let isTerminal? ([land-type] of patch-here = "residence" or [land-type] of patch-here = "company")
-  create-edges-with vertices-on neighbors4 with [land-type = "road"][
+  let isTerminal? ([land-type] of patch-here = "residence" or [land-type] of patch-here = "company") ;;判断是否为终点 patch-here返回海龟下方的瓦片
+  create-edges-with vertices-on neighbors4 with [land-type = "road"][ ;; neighbors4返回由4个相邻瓦片组成的主体集合
     set shape "dotted"
     set bus-route? false
     ifelse (isTerminal?)[
@@ -256,11 +265,12 @@ to setup-graph
   ]
 end
 
+;;创建patch-set为roads、residences和companies的图（顶点和边）
 to setup-map
   ;;  initialize vertices
-  ask roads [
-    sprout-vertices 1 [hide-turtle]
-  ]
+  ask roads [                       ;; roads为一个patch-set型变量，在setup-patch函数中已初始化
+    sprout-vertices 1 [hide-turtle] ;; sprout-<breeds> number [ commands ] 在当前瓦片上创建number个新海龟。新海龟的方向是随机整数，颜色从14个主色中随机产生。海龟立即运行commands，如果要给新海龟不同的颜色、方向等就比较有用。（新海龟是一次全部产生出来，然后以随机顺序每次运行1个）如果使用sprout-<breeds>形式，则新海龟属于给定的种类。
+  ]                                 ;; hide-turtle等价于设置海龟变量的hidden? 为true
   ask residences [
     sprout-vertices 1 [hide-turtle]
   ]
@@ -269,27 +279,27 @@ to setup-map
   ]
   ;;  initialize edges
   ask vertices [
-    setup-graph
+    setup-graph ;; 生成边
   ]
 end
-
+;;给setup-citizens调用，在住所生成居民，调用者为当前新生成的居民
 to setup-citizen
   ;;  set residence
-  ask patch-here [ set num num + 1 ]
+  ask patch-here [ set num num + 1 ] ;; 当前patch的num属性加1（num表示该住所的居民数）
   ;;  set company
-  let my-company one-of companies with [num < company-capacity]
-  if (my-company = nobody)[
-    let new-company one-of company-district with [land-type = "idle-estate"]
+  let my-company one-of companies with [num < company-capacity] ;; 随机选择一个公司容量不满的公司作为该居民的公司
+  if (my-company = nobody)[ ;; 若公司容量都满了
+    let new-company one-of company-district with [land-type = "idle-estate"] ;; 在闲置地产找一块空地
     ask new-company [
       set land-type "company"
       set pcolor blue
       set num 0
-      sprout-vertices 1 [
-        setup-graph
+      sprout-vertices 1 [ ;;生成顶点
+        setup-graph ;; 生成边
         hide-turtle
       ]
     ]
-    set companies (patch-set companies new-company)
+    set companies (patch-set companies new-company) ;;重新设置compaines这个patch-set为compaines+new-company
     set my-company new-company
   ]
   ask my-company [ set num num + 1 ]
@@ -297,15 +307,15 @@ to setup-citizen
   ;;  set basic properties
   set residence         one-of vertices-on patch-here
   set company           one-of vertices-on my-company
-  set earning-power     5
+  set earning-power     5 ;; ??
 
   ;;  set has-car?
-  ifelse random 100 < has-car-ratio [
+  ifelse random 100 < has-car-ratio [ ;;设置车辆拥有率，has-car-ratio为一个阈值
     set has-car? true
-    set color    magenta
+    set color    magenta ;; 有车的人颜色为深紫色
   ][
     set has-car? false
-    set color    cyan
+    set color    cyan ;; 无车的人颜色为浅蓝色
   ]
 
   ;;  set transportation properties
@@ -314,31 +324,32 @@ to setup-citizen
   ;;  set other properties
   set speed               0
   set advance-distance    0
-  set still?              false
-  set time                0
-  set last-commuting-time nobody
-  set commuting-counter   0
+  set still?              false ;; ??
+  set time                0 ;; ??
+  set last-commuting-time nobody ;; ??
+  set commuting-counter   0 ;; 通勤计次??
 
-  ;;  set trip-mode
+  ;;  set trip-mode 居民出行行为选择
   set-trip-mode
 
   ;;  set path
-  set path find-path residence company trip-mode
+  set path find-path residence company trip-mode ;; find-path是一个函数，输入三个参数：起点，终点，出行方式, 返回一个list是结点组成的路径
 
   ;;  hatch mapping person
-  face first path
-  let controller         self
+  face first path ;; 设置居民朝向为第一个结点
+  let controller         self ;; 将self（也就是居民）赋值给controller变量,controller也就是人
   let controller-heading heading
   hide-turtle            ;; debug
 
-  hatch-mapping-citizens 1 [
+  hatch-mapping-citizens 1 [ ;; 本residence孵化一个mapping-citizen，并：
     set shape          "person business"
-    set color          color
+    set color          color ;; 将residence的颜色设置为mapping-citizen的颜色
     set heading        heading
-    rt 90
-    fd 0.25
-    lt 90
-    create-map-link-with controller [tie]
+    ;; 为了区分citizen和mapping-citizen
+    rt 90 ;; 右转90度
+    fd 0.25 ;; 前进0.25
+    lt 90 ;; 左转90度
+    create-map-link-with controller [tie] ;; 当前mapping-citizen与citizen连接（map-link是连接mapping-citizen和controller的无向链,tie为捆绑在一起，影响运动和方向
     show-turtle
   ]
 
@@ -350,7 +361,7 @@ to setup-citizens
   set-default-shape citizens "person business"
   ask residences [
     sprout-citizens residence-capacity [
-      setup-citizen
+      setup-citizen ;;在住所生成居民
     ]
   ]
 end
@@ -361,25 +372,26 @@ end
 
 ;;  fundamental movement
 to advance [len]
-  ifelse (advance-distance > len) [
+  ifelse (advance-distance > len) [ ;; 若前面主体的距离大于len
     fd len
-    set advance-distance advance-distance - len
-  ][
-    fd advance-distance
-    set advance-distance 0
+    set advance-distance advance-distance - len ;; 重新计算前车距离
+  ][ ;; 若小于len
+    fd advance-distance ;; 前进这个数
+    set advance-distance 0 ;; 设前车距离为0
   ]
 end
 
+;; 停duartion的时间
 to halt [duration]
   set time   duration
   set still? true
   set speed  0
 end
 
-;;  taxi-related
+;;  taxi-related 返回一个taxi主体，若没找到就返回null
 to-report find-taxi
   let this             self
-  let available-taxies ((taxies with [is-ordered? = false and is-occupied? = false]) in-radius taxi-detect-distance)
+  let available-taxies ((taxies with [is-ordered? = false and is-occupied? = false]) in-radius taxi-detect-distance) ;; 在taxi-detect-distance范围内找一个没被预定且没被占用的taxi
   ifelse count available-taxies > 0 [
     report min-one-of available-taxies [distance this]
   ][
@@ -450,12 +462,13 @@ to passengers-on-off
   ]
 end
 
-;;  set
+;;
 to set-max-speed [avg-max-speed]
-  set max-speed           random-normal avg-max-speed (avg-max-speed * 0.1)
+  set max-speed           random-normal avg-max-speed (avg-max-speed * 0.1) ;; random-normal mean standard-deviation 根据均值mean返回服从相应分布的随机数，对正态分布还要给出标准差standard-deviation
   if max-speed <= 0       [ set max-speed avg-max-speed ]
 end
 
+;; 设置速度
 to set-speed
   ;; agent can only see one patch ahead of it
   let controller      self
@@ -502,7 +515,7 @@ to set-speed
     ]
 
     ;;  slow down before the red light
-    if (patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 = red)[
+    if (patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 = 19)[
       let red-light-distance (distance patch-ahead 1)
       if (red-light-distance < safe-distance)[
         set safe-distance red-light-distance
@@ -572,42 +585,45 @@ to set-moving-shape
   ]
 end
 
+;; 设置出行方式（可从这里修改代码）
 to set-trip-mode
-  if breed = citizens [
+  if breed = citizens [ ;; 只有一个判断
+    ;; 若有车则选择私家车出行
     ifelse has-car? [
       set trip-mode 1
       set-max-speed car-speed
-    ][
-      let target-taxi find-taxi
-      ifelse (target-taxi != nobody) [
-        let this self
+    ][ ;; 若无车,则先找出租车
+      let target-taxi find-taxi ;; 找出租车，赋给target-taxi
+      ifelse (target-taxi != nobody) [ ;;若找到出租车
+        let this self ;;self为citizen
         ask target-taxi [
           ;;  taxi is already on the patch of passenger
-          ifelse (patch-here != [patch-here] of this)[
-            let departure   one-of vertices-on patch-here
-            let destination one-of vertices-on [patch-here] of this
-            set path        find-path departure destination 4
-            face first path
-          ][
-            set path []
+          ifelse (patch-here != [patch-here] of this)[ ;; 当出租车不在在乘客的瓦片上时
+            let departure   one-of vertices-on patch-here ;; 出租车所在位置设为起点
+            let destination one-of vertices-on [patch-here] of this ;; 乘客所在位置设为终点
+            set path        find-path departure destination 4 ;; 寻路，返回一个路径顶点集合
+            face first path ;; 将乘客朝向指向第一个路径顶点
+          ][ ;; 当出租车在在乘客的瓦片上时
+            set path [] ;; 重新设置出租车的的路径属性为空列表
           ]
-          set is-ordered? true
-          create-taxi-link-with this [
-            set shape     "taxi-link-shape"
-            set color     sky
-            set thickness 0.05
+          set is-ordered? true ;; 设置该出租车为is-ordered属性为true
+          create-taxi-link-with this [ ;; 设置连接乘客和出租车的taxi-link
+            set shape     "taxi-link-shape" ;; shape为一个字符串
+            set color     sky ;; 颜色为天蓝色
+            set thickness 0.05 ;; 厚度
           ]
         ]
-        set trip-mode 3
+        set trip-mode 3 ;; 3为take taxi
         set-max-speed car-speed
-      ][
-        set trip-mode 2
+      ][;; 若没找到出租车
+        set trip-mode 2 ;; 设置出行方式为乘公交车
         set-max-speed person-speed
       ]
     ]
   ]
 end
 
+;; 设置路径
 to set-path
   let origin-point     nobody
   let terminal-point   nobody
@@ -645,16 +661,18 @@ to set-path
   ]
 end
 
-;;  basic behavior
+;;  basic behavior :
+;; 停等行为
 to watch-traffic-light
-  if ([land-type] of patch-here = "road" and [pcolor] of patch-here = red)[
+  if ([land-type] of patch-here = "road" and [pcolor] of patch-here = 19)[ ;; 若为红灯则停止
     halt 0
   ]
-  if ([land-type] of patch-here = "road" and [pcolor] of patch-here = green)[
+  if ([land-type] of patch-here = "road" and [pcolor] of patch-here = 69)[ ;; 若为绿灯则启动
     set still? false
   ]
 end
 
+;; stay:由citizens bus taxi调用
 to stay
   if (time = 1)[
     if (trip-mode != 3)[
@@ -736,16 +754,17 @@ to stay
     set time time - 1
   ]
   if (time = 0 and breed = taxies and is-ordered? = true and still? = true)[
-    if ([pcolor] of patch-here != red)[
+    if ([pcolor] of patch-here != 19)[
       set still? false
     ]
   ]
 end
 
+;; 移动，由process调用
 to move
   set-speed
-  set advance-distance speed
-  while [advance-distance > 0 and length path > 1] [
+  set advance-distance speed ;; 设置一次tick的前进距离为speed
+  while [advance-distance > 0 and length path > 1] [ ;; 当path列表的数量大于1且
     watch-traffic-light
     let next-vertex first path
     if (distance next-vertex < 0.0001) [
@@ -783,10 +802,10 @@ end
 ;;  uniform controller
 to progress
   ask citizens [
-    set commuting-counter commuting-counter + 1
-    if (count bus-link-neighbors = 0)[
-      watch-traffic-light
-      ifelse still? [
+    set commuting-counter commuting-counter + 1 ;; 所有citizens自身的通勤计次加1
+    if (count bus-link-neighbors = 0)[ ;; 当旁边没有公车时
+      watch-traffic-light ;; 判断是否在信号灯下并执行相应动作（会设置still）
+      ifelse still? [ ;; 若still为true则为在信号灯下
         stay
       ][
         move
@@ -815,10 +834,10 @@ end
 
 to change-traffic-light
   ifelse (traffic-light-count = 0)[
-    let green-patches patches with [pcolor = green]
-    let red-patches   patches with [pcolor = red]
-    ask green-patches [set pcolor red]
-    ask red-patches   [set pcolor green]
+    let green-patches patches with [pcolor = 69]
+    let red-patches   patches with [pcolor = 19]
+    ask green-patches [set pcolor 19]
+    ask red-patches   [set pcolor 69]
     set traffic-light-count traffic-light-cycle
   ][
     set traffic-light-count (traffic-light-count - 1)
@@ -839,6 +858,7 @@ end
 ;; Interaction
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; 添加居民
 to add-citizen
   let my-residence one-of (residences with [num < residence-capacity])
   if (my-residence = nobody)[
@@ -866,6 +886,7 @@ to add-citizen
   ]
 end
 
+;; 添加出租车
 to add-taxi
   ask one-of companies [
     let taxi-heading         0
@@ -907,6 +928,7 @@ to add-taxi
   ]
 end
 
+;; 添加公交站点
 to add-bus-stop
   ;; setup
   ask global-origin-station [
@@ -976,10 +998,12 @@ to add-bus-stop
   ]
 end
 
+;; 鼠标点击事件判断
 to-report mouse-clicked?
   report (mouse-was-down? = true and not mouse-down?)
 end
 
+;; 鼠标点击事件回调函数
 to mouse-manager
   let mouse-is-down? mouse-down?
   if mouse-clicked? [
@@ -1132,15 +1156,16 @@ to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi
   ]
 end
 
+;; 寻路算法，使用迪杰斯特拉算法寻找路径，输入为三个参数：起点，终点，和出行方式：1: take car, 2: take bus, 3: take taxi， 4：taxi, 5: bus
 to-report find-path [source target mode]
-  dijkstra source target mode
-  let path-list (list target)
-  let pred [predecessor] of target
-  while [pred != source][
-    set path-list fput pred path-list  ;; fput: Add item to the beginning of a list
-    set pred [predecessor] of pred
+  dijkstra source target mode ;; 使用迪杰斯特拉算法
+  let path-list (list target) ;; 创建一个list变量，为多个终点
+  let pred [predecessor] of target ;; 将终点的前驱赋给pred变量
+  while [pred != source][ ;; 当前驱不是起点，循环
+    set path-list fput pred path-list  ;; fput: Add item to the beginning of a list ;; 将当前结点前驱添加到path-list中
+    set pred [predecessor] of pred ;; 设置pred变量为前驱的前驱
   ]
-  report path-list
+  report path-list ;; 返回这个path-list，即结点组成的路径
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -1241,7 +1266,7 @@ initial-people-num
 initial-people-num
 0
 200
-80.0
+200.0
 1
 1
 NIL
@@ -1288,7 +1313,7 @@ has-car-ratio
 has-car-ratio
 0
 100
-30.0
+70.0
 1
 1
 NIL
@@ -1855,7 +1880,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@

@@ -49,15 +49,20 @@ This is an urban transportation system simulating citizens’ commuting by priva
 ### Overall
 The whole city is presented as grid. It is composed of different kinds of patches: land, idle-estate, residence, company, road and bus-stop.
 
-The model contains four subdivision systems: citizens, taxies, buses and traffic lights. User can manipulate this transportation system by setting global variables in the beginning or regulating the number of taxies and creating bus lines during the simulation.
+The model contains four subdivision（子系统） systems: citizens, taxies, buses and traffic lights. User can manipulate this transportation system by setting global variables in the beginning or regulating the number of taxies and creating bus lines during the simulation.
 
 ### Citizen
-Every citizen has its own residence and company. The citizen's goal is to move back and forth between his residence and his company as quickly as possible. If the citizen has a private car, then he commutes by his own car. Otherwise, he either takes taxi if there exists idle one nearby or takes bus.
+Every citizen has its own residence and company. The citizen's goal is to move back and forth between his residence and his company as quickly as possible. If the citizen has a private car, then he commutes by his own car. Otherwise, he either takes taxi if there exists idle one nearby or takes bus. 
+
+// 少一个步行
 
 ### Vehicle
+
 All vehicles are running in the two-lane roads and abide by the traffic lights. Vehicles will decelerate when there are other vehicles or red light ahead, or accelerate until reaching the max speed in other situations.
 
 Taxies travel randomly from house to house when idle and buses are driven alongside their bus lines continuously. One taxi can only carry one passenger, meanwhile, one bus can carry up to 4 passengers.
+
+// 少一个地铁系统
 
 ### Traffic Regulation
 Traffic lights switch periodically.
@@ -126,6 +131,7 @@ The program is made up of the following six parts.
 - Transportation: bus-stop
 
 #### Environment
+
 ```
 Land        -- deeper brown
 Idle-estate -- deep brown
