@@ -74,7 +74,7 @@ citizens-own[
   still? ;;是否静止，布尔型变量
   time ;; ??
   ;; trip
-  last-commuting-time ;; ??
+  last-commuting-time ;;
   commuting-counter ;; 居民走了多少时间，每次tick时加1
 ]
 
@@ -161,9 +161,9 @@ to setup-globals
   set bus-speed            0.2424028
   set acceleration         0.25
   set deceleration         0.5
-  set event-duration       50
-  set bus-duration         2
-  set taxi-duration        2
+  set event-duration       720
+  set bus-duration         1
+  set taxi-duration        1
   set buffer-distance      1.0 ;; 缓冲距离为一个砖块
   set money                0
 end
@@ -323,11 +323,11 @@ to setup-citizen
 
   ;;  set other properties
   set speed               0
-  set advance-distance    0
-  set still?              false ;; ??
+  set advance-distance    0 ;; 距离他人为0
+  set still?              false ;; 开始行走
   set time                0 ;; ??
   set last-commuting-time nobody ;; ??
-  set commuting-counter   0 ;; 通勤计次??
+  set commuting-counter   0 ;; 通勤计次，每一个ticks加1
 
   ;;  set trip-mode 居民出行行为选择
   set-trip-mode
@@ -488,7 +488,7 @@ to set-speed
   let safe-distance   100    ;; positive infinity  安全距离，初始化时为正无穷
 
   if (count taxi-link-neighbors > 0)[ ;; 若有出租车
-    set my-taxi       one-of [map-link-neighbors] of one-of taxi-link-neighbors 从taxi-link的主体中选出任意一个的任意一个map-link-neighbor
+    set my-taxi       one-of [map-link-neighbors] of one-of taxi-link-neighbors ;; 从taxi-link的主体中选出任意一个的任意一个map-link-neighbor
   ]
 
   ifelse patch-ahead 1 != nobody [ ;; 若不是边界（patch-ahead: 返回沿调用海龟当前方向前方给定距离处的单个瓦片。如果超出世界范围，瓦片不存在，则返回nobody）
@@ -498,36 +498,39 @@ to set-speed
     set turtles-ahead turtle-set (other turtles-here) ;; 将当前主体之外的其他海龟作为一个turtle-set
     with [who != [who] of this and who != [who] of my-taxi]
   ]
-  if turtles-ahead != nobody [ ;; 若前方没有海龟
-    set vehicles-ahead turtles-ahead with[
-      (shape = "car top" or shape = "van top" or shape = "bus")  ;; private car, taxi and bus ;; 设置vehicle-ahead为前方的私家车、出租车和公交车
-    ]
-  ]
-  ifelse (vehicles-ahead != nobody and count vehicles-ahead > 0 and any? vehicles-ahead with [distance this = 0])[ ;; 若前方有车，且存在与当前主体距离为0的海龟 （distance agent/patch：返回本主体与给定海龟或瓦片的距离）
-    ifelse speed != 0 [  ;; 若当前主体速度不为0
-      set speed random-float speed ;; 设置速度小于原来速度(random-float number:如果number为正，返回大于等于0、小于number的一个随机浮点数) 该语句意思为lim_(distance->0) speed = 0
-    ][ ;; 若为0
-      set speed random-float person-speed  ;; restart 设置速度为人的速度
-    ]
-  ][;; 若不存在与当前主体距离为0的海龟
-    if (vehicles-ahead != nobody and count vehicles-ahead > 0) [  ;; 若前方有车
-      set jam-ahead vehicles-ahead with[ ;; 设置jam-ahead为前方车队集合，这个集合要满足：
-        abs (abs ([heading] of this - towards this) - 180) < 1 and  ;; in front of self 该车在主体前方（towards agent 返回从本主体到给定主体的方向）
-        abs (heading - [heading] of this) < 1                       ;; same direction   且属于同一方向
-      ]
-      if (jam-ahead != nobody and count jam-ahead > 0) [ ;; 若找到该jam-ahead车队集合
-        set nearest-vehicle min-one-of jam-ahead [distance this] ;; 找到jam-ahead里距离当前主体最近的车辆
-        set safe-distance distance nearest-vehicle ;; 设置安全距离为jam-ahead里前方最近的车辆的距离
-      ]
-    ]
+
+  ;;;
+  ;;;if turtles-ahead != nobody [ ;; 若前方没有海龟
+  ;;;  set vehicles-ahead turtles-ahead with[
+  ;;;    (shape = "car top" or shape = "van top" or shape = "bus")  ;; private car, taxi and bus ;; 设置vehicle-ahead为前方的私家车、出租车和公交车
+  ;;;  ]
+  ;;; ]
+  ;;; ifelse (vehicles-ahead != nobody and count vehicles-ahead > 0 and any? vehicles-ahead with [distance this = 0])[ ;; 若前方有车，且存在与当前主体距离为0的海龟 （distance agent/patch：返回本主体与给定海龟或瓦片的距离）
+  ;;; ifelse speed != 0 [  ;; 若当前主体速度不为0
+  ;;;    set speed random-float speed ;; 设置速度小于原来速度(random-float number:如果number为正，返回大于等于0、小于number的一个随机浮点数) 该语句意思为lim_(distance->0) speed = 0
+  ;;;  ][ ;; 若为0
+  ;;;    set speed random-float person-speed  ;; restart 设置速度为人的速度
+  ;;;  ]
+  ;;;][;; 若不存在与当前主体距离为0的海龟
+  ;;;  if (vehicles-ahead != nobody and count vehicles-ahead > 0) [  ;; 若前方有车
+  ;;;    set jam-ahead vehicles-ahead with[ ;; 设置jam-ahead为前方车队集合，这个集合要满足：
+  ;;;      abs (abs ([heading] of this - towards this) - 180) < 1 and  ;; in front of self 该车在主体前方（towards agent 返回从本主体到给定主体的方向）
+  ;;;      abs (heading - [heading] of this) < 1                       ;; same direction   且属于同一方向
+  ;;;    ]
+  ;;;    if (jam-ahead != nobody and count jam-ahead > 0) [ ;; 若找到该jam-ahead车队集合
+  ;;;      set nearest-vehicle min-one-of jam-ahead [distance this] ;; 找到jam-ahead里距离当前主体最近的车辆
+  ;;;      set safe-distance distance nearest-vehicle ;; 设置安全距离为jam-ahead里前方最近的车辆的距离
+  ;;;    ]
+  ;;;  ]
+  ;;;
 
     ;;  slow down before the red light
-    if (patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 = 19)[ ;; 若前方为红灯
-      let red-light-distance (distance patch-ahead 1) ;; 计算前方红灯的距离
-      if (red-light-distance < safe-distance)[ ;; 若小于安全距离
-        set safe-distance red-light-distance ;; 则设置安全距离为前方红灯距离
-      ]
-    ]
+    ;;;if (patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 = 19)[ ;; 若前方为红灯
+    ;;;  let red-light-distance (distance patch-ahead 1) ;; 计算前方红灯的距离
+    ;;;  if (red-light-distance < safe-distance)[ ;; 若小于安全距离
+    ;;;    set safe-distance red-light-distance ;; 则设置安全距离为前方红灯距离
+    ;;;  ]
+    ;;;]
 
     ifelse safe-distance < buffer-distance [ ;; 若安全距离小于默认安全车距
       set speed 0 ;; 立即停止
@@ -551,16 +554,16 @@ to set-speed
         ]
       ]
     ]
-  ]
+
 end
 
 ;; 设置
 to set-duration
-  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3)[           ;; 若主体为person
+  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3)[           ;; 若主体为居民
     ;;  record
     ifelse last-commuting-time = nobody [                             ;; 若上次保存的通勤时间为null（尚未初始化）
       set last-commuting-time commuting-counter                       ;; 设置上次保存的通勤时间为通勤计次
-    ][                                                                ;; 若不为null
+    ][                                                                ;; 若通勤时间不为null
       set last-commuting-time commuting-counter - event-duration      ;; 设置上次保存的通勤时间为通勤计次减事件循环时间
     ]
     set   commuting-counter   0
@@ -586,7 +589,7 @@ to set-static-shape
   ]
 end
 
-;; 由setup-citizens调用，将controller下的map-link-neighbors也就是交通工具（私家车）初始化形状，
+;; 由setup-citizens调用，将controller下的map-link-neighbors也就是交通工具（私家车）初始化形状
 to set-moving-shape
   if trip-mode = 1 [
     ask map-link-neighbors [
@@ -697,7 +700,7 @@ to stay
 
     ;; citizen
     if breed = citizens [
-      ifelse (trip-mode = 3)[ ;; 若居民的出行方式为
+      ifelse (trip-mode = 3)[ ;; 若居民的出行方式为take taxi
         let this      self
         let link-taxi one-of taxi-link-neighbors
         if ([is-ordered?] of link-taxi = true)[
