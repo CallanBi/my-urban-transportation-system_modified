@@ -1,6 +1,6 @@
 ;; 定义海龟种类 其中，mapping-<xx>为视图，用于连接顶点
 breed [citizens          citizen] ;; 居民
-breed [mapping-citizens  mapping-citizen] ;; mapping-citizens为视图上的居民（可为私家车）
+breed [mapping-citizens  mapping-citizen] ;; mapping-citizens为视图上的居民（可为私家车）。
 breed [buses             bus]
 breed [mapping-buses     mapping-bus]
 breed [taxies            taxi]
@@ -162,8 +162,8 @@ to setup-globals
   set acceleration         0.25
   set deceleration         0.5
   set event-duration       720
-  set bus-duration         1
-  set taxi-duration        1
+  set bus-duration         1 ;; ??
+  set taxi-duration        1 ;; ??
   set buffer-distance      1.0 ;; 缓冲距离为一个砖块
   set money                0
 end
@@ -203,14 +203,14 @@ to setup-patches
   ;;  land
   ask patches with [land-type != "road"][
     set land-type "land"
-    set pcolor brown + 2
+    set pcolor green ;; 公共用地用绿色
   ]
   ;;  idle estate
   ask patches with [
     any? neighbors with [land-type = "road"] and land-type = "land"
   ][
     set land-type "idle-estate"
-    set pcolor brown + 3
+    set pcolor grey ;; 未开发用地用灰色
   ]
   set idle-estates patch-set patches with [land-type = "idle-estate"] ;; patch-set 返回包含所有输入瓦片的主体集合
   ;;  residence-district 居住区域（注意不是住所）
@@ -312,10 +312,10 @@ to setup-citizen
   ;;  set has-car?
   ifelse random 100 < has-car-ratio [ ;;设置车辆拥有率，has-car-ratio为一个阈值
     set has-car? true
-    set color    magenta ;; 有车的人颜色为深紫色
+    set color    magenta ;; 有车的人颜色为洋红色
   ][
     set has-car? false
-    set color    cyan ;; 无车的人颜色为浅蓝色
+    set color    cyan ;; 无车的人颜色为青色
   ]
 
   ;;  set transportation properties
@@ -354,7 +354,7 @@ to setup-citizen
   ]
 
   ;;  set shape
-  set-moving-shape
+  ;;set-moving-shape
 end
 
 to setup-citizens
@@ -452,7 +452,7 @@ to passengers-on-off
   ]
   ;; taxi
   if trip-mode = 3 [ ;; 主体为出租车
-    if (patch-here = [patch-here] of company or patch-here = [patch-here] of residence) [ ;; 若出租车在公司或住所
+    if (patch-here = [patch-here] of company or patch-here = [patch-here] of residence) [ ;; 若出租车在公司或住所（即已到达终点）
       set trip-mode 2 ;; 设置出行方式为take bus
       ;; 下出租车
       ask one-of taxi-link-neighbors [
@@ -568,7 +568,7 @@ to set-duration
     ]
     set   commuting-counter   0
     ;;  halt
-    halt event-duration ;; 停止
+    halt event-duration ;; 在公司，停止
   ][
     ifelse (trip-mode = 4)[                 ;; taxi
       halt taxi-duration
@@ -648,17 +648,17 @@ to set-path
   ]
   if breed = taxies [
     set origin-point   one-of vertices-on patch-here
-    ifelse (is-ordered? = true)[
-      set terminal-point [patch-here] of one-of taxi-link-neighbors
+    ifelse (is-ordered? = true)[ ;; 若已有预定
+      set terminal-point [patch-here] of one-of taxi-link-neighbors ;; 将目的地设置为绑定的居民
     ][
-      set terminal-point one-of companies
+      set terminal-point one-of companies ;; 将目的地设置为某个商业区域
     ]
-    ifelse (terminal-point = patch-here) [
-      set terminal-point one-of vertices-on one-of residences
-    ][
-      set terminal-point one-of vertices-on terminal-point
+    ifelse (terminal-point = patch-here) [ ;; 若到达目的地
+      set terminal-point one-of vertices-on one-of residences ;; 将目的地设置为某个住所区域
+    ][ ;; 若未到目的地
+      set terminal-point one-of vertices-on terminal-point  ;;
     ]
-    set mode           4
+    set mode           4 ;; 4代表出租车
   ]
   if breed = buses [
     set origin-point   origin-station
@@ -687,10 +687,10 @@ end
 
 ;; stay:由citizens bus taxi调用
 to stay
-  if (time = 1)[
-    if (trip-mode != 3)[
+  if (time = 1)[ ;; 若达到通勤事件周期最后
+    if (trip-mode != 3)[ ;; 若模式不是take taxi
       ;; set path
-      set-trip-mode
+      set-trip-mode ;; 重新进行路径选择
       set-path
       if (trip-mode != 3)[
         set time time - 1
@@ -773,11 +773,12 @@ to stay
   ]
 end
 
-;; 居民、出租车、公交车的移动 由process调用
+;; 居民、出租车、公交车的移动 由progress调用
 to move
+  set-moving-shape
   set-speed ;; 设定当前主体的速度
   set advance-distance speed ;; 设置一次tick的前进距离为speed
-  while [advance-distance > 0 and length path > 1] [ ;; 当path列表的数量大于1且
+  while [advance-distance > 0 and length path > 1] [ ;; 当path列表的数量大于1
     ;;watch-traffic-light
     let next-vertex first path ;; 找到下一个路径结点
     if (distance next-vertex < 0.0001) [ ;; 当主体距离路径结点距离小于0.0001
@@ -793,18 +794,18 @@ to move
     ]
   ]
 
-  if (length path = 1)[
+  if (length path = 1)[ ;; 列表的第一个结点为终点(即差一步到达终点)
     while [advance-distance > 0 and length path = 1][
       ;;watch-traffic-light
       let next-vertex first path
       face next-vertex
-      ifelse (distance next-vertex < 0.0001) [  ;; arrived at destination
+      ifelse (distance next-vertex < 0.0001) [  ;; arrived at destination 到达终点
         set path []
         passengers-on-off
         ;; wait
         set-duration
         ;; set default shape
-        set-static-shape
+        set-static-shape;; 变化形状为静止是的形状
       ][
         advance distance next-vertex
       ]
@@ -904,17 +905,17 @@ end
 
 ;; 添加出租车
 to add-taxi
-  ask one-of companies [
+  ask one-of companies [ ;; 出租车生成于某公司
     let taxi-heading         0
     let controller           nobody
     sprout-taxies 1 [
       ;;  transportation
-      let departure          one-of vertices-on patch-here
-      let destination        one-of companies
-      ifelse (destination = patch-here) [
-        set destination      one-of vertices-on one-of residences
+      let departure          one-of vertices-on patch-here ;; 出发点为该公司
+      let destination        one-of companies ;; 终点为某公司
+      ifelse (destination = patch-here) [ ;; 若这个终点和出发点一样
+        set destination      one-of vertices-on one-of residences ;; 设置为某一居民区
       ][
-        set destination      one-of vertices-on destination
+        set destination      one-of vertices-on destination ;; 若不一样则不变
       ]
       set trip-mode          4
       set path               find-path departure destination trip-mode
