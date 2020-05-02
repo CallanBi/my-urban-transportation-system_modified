@@ -1,3 +1,5 @@
+extensions [array table] ;; 使用数组和哈希表拓展
+
 ;; 定义海龟种类 其中，mapping-<xx>为视图，用于连接顶点
 breed [citizens          citizen] ;; 居民
 breed [mapping-citizens  mapping-citizen] ;; mapping-citizens为视图上的居民（可为私家车）。
@@ -61,11 +63,11 @@ citizens-own[
   ;;  basic
   residence
   company
-  has-car? ;; 布尔型变量，是否有车
+
   ;;  game
   earning-power ;; 赚钱能力？
   ;;  transportation
-  trip-mode                ;;  1: take car, 2: take bus, 3: take taxi
+  trip-mode                ;;  1: take car, 2: take bus, 3: take taxi 4： take ride 5: take subway 6: take bike  1 私家车 2 公交车 3 出租车 4 顺风车 5 地铁 6 短途自行车
   path ;;一个路径list，由寻路方法获得
   max-speed
   ;; round
@@ -76,6 +78,18 @@ citizens-own[
   ;; trip
   last-commuting-time ;;
   commuting-counter ;; 居民走了多少时间，每次tick时加1
+
+  ;; 确定出行方式相关的工作时间
+  workTime
+
+  ;; 用于确定出行方式的效益模型
+  income       ;; 实际收入值
+  has-car?     ;; 布尔型变量，是否有车 true有，false无， （用于编程）
+  hasCar       ;; 是否有车， 1有，0无
+  education    ;; 1 高中及以下， 2 大专，3 本科，4 硕士及以上
+  age          ;; 实际年龄值
+  occupation   ;; 1 学生，2 工人， 3 公务员，4 员工， 5 自由职业者， 6 退休者
+  sex          ;; 0 男， 1女
 ]
 
 ;; 传统出租车
@@ -213,7 +227,7 @@ to setup-patches
     set pcolor grey ;; 未开发用地用灰色
   ]
   set idle-estates patch-set patches with [land-type = "idle-estate"] ;; patch-set 返回包含所有输入瓦片的主体集合
-  ;;  residence-district 居住区域（注意不是住所）
+  ;;  residence-district 居住区域（注意不是住所）set
   set residence-district patch-set patches with [
     ((pxcor > max-pxcor / 2) or (pxcor < (- max-pxcor / 2)) or        ;;
     (pycor > max-pycor / 2) or (pycor < (- max-pycor / 2))) and
@@ -309,14 +323,72 @@ to setup-citizen
   set company           one-of vertices-on my-company
   set earning-power     5 ;; ??
 
-  ;;  set has-car?
-  ifelse random 100 < has-car-ratio [ ;;设置车辆拥有率，has-car-ratio为一个阈值
-    set has-car? true
-    set color    magenta ;; 有车的人颜色为洋红色
-  ][
-    set has-car? false
-    set color    cyan ;; 无车的人颜色为青色
+  ;; 确定出行效益相关参数
+
+  ;; 设置收入
+  set income random-normal 7086 14000
+  if income < 0 [
+    set income 2200
   ]
+
+  ;;  set has-car? 设定拥车率：设置为月收入高于10000元以上，有50%拥车；月收入低于10000元以下，有20%拥车
+  ifelse income > 10000 [
+    ifelse random 100 < 50 [
+      set has-car? true
+      set hasCar 1         ;; 与出行方式计算有关
+      set color    magenta ;; 有车的人颜色为洋红色
+    ][
+      set has-car? false
+      set hasCar 0
+      set color    cyan ;; 无车的人颜色为青色
+    ]
+  ][
+    ifelse random 100 < 20 [
+      set has-car? true
+      set hasCar 1
+      set color    magenta ;; 有车的人颜色为洋红色
+    ][
+      set has-car? false
+      set hasCar 0
+      set color    cyan ;; 无车的人颜色为青色
+    ]
+  ]
+
+  ;; 设置学历
+  let eduProperty random 100
+  if eduProperty <= 62.1197776 [
+    set education 1
+  ]
+  if eduProperty > 62.1197776 and eduProperty <= 76.0750426 [
+    set education 2
+  ]
+  if eduProperty > 76.0750426 and eduProperty <= 95.0225428 [
+    set education 3
+  ]
+  if eduProperty > 95.0225428 and eduProperty <= 100 [
+    set education 4
+  ]
+
+  ;; 设置年龄age
+  set age random-normal 35.7 19.43579173
+  if age < 0 [
+    set age 1
+  ]
+
+  ;; 设置职业
+  set occupation random 6 + 1
+
+  ;; 设置性别
+  set sex random 2
+
+
+
+  ;; 设置工作时间(h为单位)
+  set workTime random-normal 8 2
+
+
+
+
 
   ;;  set transportation properties
   set-max-speed           person-speed
@@ -557,7 +629,7 @@ to set-speed
 
 end
 
-;; 设置
+;; 控制居民出行和工作、休息时间
 to set-duration
   ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3)[           ;; 若主体为居民
     ;;  record
@@ -598,9 +670,212 @@ to set-moving-shape
   ]
 end
 
+;; 确定出行方式，调用者为citizens，输入出行距离和工作时间
+to-report getTravelMethod [dist myWorkTime]
+  ;; 出行方式：1 私家车 2 公交车 3 出租车 4 顺风车(乘客) 5 地铁 6 短途自行车 7 顺风车(司机)
+
+  ;; 使用array保存效益，返回最大效益的下标
+  let benefitArr array:from-list n-values 7 [0]
+
+  ;; 权重计算
+  let lambda 0.677 * income + 0.156 * hasCar + 0.167 * education
+  let mu -0.34 * age + 0.642 * income + 0.063 * occupation + 0.635 * hasCar
+  let omega -0.171 * sex + 0.012 * income + 1.159 * education
+
+  if has-car? = true [
+    ;; 计算私家车的效益
+    let carS  1
+    let carTC (dist / 60 - dist / 26.31) * 1.5
+    let carM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime
+
+    array:set benefitArr 0 mu * carS / (lambda * carTC + omega * carM)
+  ]
+
+
+  ;; 计算公交车的效益
+  let busS  1 - (2.4 / 2.5) ^ 5
+  let busTC 6 / 60 + dist / 16 - dist / 20
+  let busM nobody
+  if dist > 0 and dist <= 10 [
+    set busM 2
+  ]
+  if dist > 10 and dist <= 15 [
+    set busM 3
+  ]
+  if dist > 15 and dist <= 20 [
+    set busM 4
+  ]
+  if dist > 20 and dist <= 25 [
+    set busM 5
+  ]
+  if dist > 25 and dist <= 30 [
+    set busM 6
+  ]
+  if dist > 30 and dist <= 35 [
+    set busM 7
+  ]
+  if dist > 35 and dist <= 40 [
+    set busM 8
+  ]
+  if dist > 40 [
+    set busM 9
+  ]
+
+  array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM)
+
+  ;; 计算出租车效益
+  let taxiS  1
+  let taxiTC (3 / 60 + dist / 60 - dist / 26.31) * 1.3
+
+  let taxiM nobody
+  if dist > 0 and dist <= 3 [
+    set taxiM 10
+  ]
+  if dist > 3 and dist <= 15 [
+    set taxiM 10 + 2 * (dist - 3)
+  ]
+  if dist > 15 [
+    set taxiM 10 + 24 + 3 * (dist - 15)
+  ]
+
+  array:set benefitArr 2 mu * taxiS / (lambda * taxiTC + omega * taxiM)
+
+  ;; 计算顺风车效益
+  ifelse has-car? = false [ ;; 若无车，则计算顺风车乘客的效益
+    let rideSharePassengerS  1
+    let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+
+    let rideSharePassengerM nobody
+    if dist > 0 and dist <= 12 [
+      set rideSharePassengerM 6.5 + dist * 1.3
+    ]
+    if dist > 12 and dist <= 40 [
+      set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
+    ]
+    if dist > 40 and dist <= 100 [
+      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
+    ]
+    if dist > 100 [
+      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+    ]
+
+    array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
+  ][
+    ;; 若有车，计算乘客效益和司机效益
+    let rideSharePassengerS  1
+    let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+
+    let rideSharePassengerM nobody
+    if dist > 0 and dist <= 12 [
+      set rideSharePassengerM 6.5 + dist * 1.3
+    ]
+    if dist > 12 and dist <= 40 [
+      set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
+    ]
+    if dist > 40 and dist <= 100 [
+      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
+    ]
+    if dist > 100 [
+      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+    ]
+
+    let rideShareDriverS 1
+    let rideShareDriverTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+    ;; 司机至少期望能接到一个乘客拼车，故其期望费用减去一个乘客的费用
+    let rideShareDriverM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime - rideSharePassengerM + 0.1 * rideSharePassengerM
+
+    array:set benefitArr 6 mu * rideShareDriverS / (lambda * rideShareDriverTC + omega * rideShareDriverM)
+  ]
+
+  ;; 计算地铁效益
+  let subwayS  1 - (1 / 1.2) ^ 5
+  let subwayTC 0.1
+  let subwayM nobody
+  if dist > 0 and dist <= 6 [
+    set subwayM 3
+  ]
+  if dist > 6 and dist <= 12 [
+    set subwayM 4
+  ]
+  if dist > 12 and dist <= 22 [
+    set subwayM 5
+  ]
+  if dist > 22 and dist <= 32 [
+    set subwayM 6
+  ]
+  if dist > 32 and dist <= 52 [
+    set subwayM 7
+  ]
+  if dist > 52 and dist <= 72 [
+    set subwayM 8
+  ]
+  if dist > 72 and dist <= 92 [
+    set subwayM 9
+  ]
+  if dist > 92 [
+    set subwayM 9 + round (dist - 92) / 20 ;; 每超过20公里增加1元
+  ]
+
+  array:set benefitArr 4 mu * subwayS / (lambda * subwayTC + omega * subwayM)
+
+  ;; 计算短途自行车效益
+  ;; 默认每个居民都有自行车
+
+  let bikeS  nobody
+
+  ;; 自行车的实际出行时间、自行车TC计算
+  let tReal nobody
+  let bikeTC nobody
+  ifelse dist <= 4 [
+    set tReal dist / 16
+    set bikeTC 0
+  ][
+    set tReal 4 / 16 + ( dist - 4 ) / 12
+    set bikeTC (4 / 16 + 1 / 12 * ( dist - 4 ) - dist / 16) * 0.5
+  ]
+
+  set bikeS 1 - ( tReal / 0.5 ) ^ 2
+
+  let bikeM 0
+
+  array:set benefitArr 5 mu * bikeS / (lambda * bikeTC + omega * bikeM)
+
+  ;; 找出数组中最大元素，即最大效益
+  let i 0
+  let tempMax 0
+  let tempMaxIndex 0
+
+  while [i < 7][
+    if array:item benefitArr i > tempMax [
+      set tempMax array:item benefitArr i
+      set tempMaxIndex i
+    ]
+    set i i + 1
+  ]
+
+  report (tempMaxIndex + 1)
+
+end
+
 ;; 设置出行方式（可从这里修改代码）
 to set-trip-mode
   if breed = citizens [ ;; 只有一个判断
+    ;; 如果当前patch为公司或住所
+    if [land-type] of patch-here = "residence" or [land-type] of patch-here = "company" [
+      let departure   one-of vertices-on patch-here ;; 居民所在位置设为起点
+
+      let destination nobody
+      ifelse [land-type] of patch-here = "residence" [
+        set destination one-of vertices-on company ;; 居民的公司设为终点
+      ][
+        set destination one-of vertices-on residence ;; 居民的住所设为终点
+      ]
+
+      let dist length find-path departure destination 1
+      let travelMethod getTravelMethod dist workTime
+      ;;show travelMethod 调试
+    ]
+
     ;; 若有车则选择私家车出行
     ifelse has-car? [
       set trip-mode 1
@@ -1147,7 +1422,7 @@ to relax [u v w]
   ]
 end
 
-to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi, 4: bus route
+to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi   4: taxi   5: bus
   initialize-single-source source
   let Q vertices
   while [any? Q][
@@ -1156,7 +1431,7 @@ to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi
     let patch-u [patch-here] of u
     ask [edge-neighbors] of u [
       let edge-btw edge [who] of u [who] of self
-      ifelse (mode = 5)[       ;; bus route
+      ifelse (mode = 5)[       ;; 若为公交车 bus route
         if ([bus-route?] of edge-btw = true)[
           relax u self edge-btw
         ]
@@ -1173,7 +1448,7 @@ to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi
   ]
 end
 
-;; 寻路算法，使用迪杰斯特拉算法寻找路径，输入为三个参数：起点，终点，和出行方式：1: take car, 2: take bus, 3: take taxi， 4：taxi, 5: bus
+;; 寻路算法，使用迪杰斯特拉算法寻找路径，输入为三个参数：起点，终点，和出行方式：1: take car, 2: take bus, 3: take taxi   4: taxi   5: bus 返回路径结点集合
 to-report find-path [source target mode]
   dijkstra source target mode ;; 使用迪杰斯特拉算法
   let path-list (list target) ;; 创建一个list变量，为多个终点
@@ -1316,21 +1591,6 @@ taxi-detect-distance
 0
 50
 15.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-3
-86
-163
-119
-has-car-ratio
-has-car-ratio
-0
-100
-70.0
 1
 1
 NIL
