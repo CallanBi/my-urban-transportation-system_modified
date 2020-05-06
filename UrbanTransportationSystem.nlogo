@@ -13,6 +13,8 @@ undirected-link-breed [map-links   map-link]   ;; link between controller and en
 undirected-link-breed [bus-links   bus-link]   ;; link between bus(vehicle) and passenger
 undirected-link-breed [taxi-links  taxi-link]  ;; link between taxi and passenger
 
+undirected-link-breed [rideSharingLinks  rideSharingLink]  ;; 合乘乘客和司机的无向链
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Variables 全局变量
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -67,7 +69,7 @@ citizens-own[
   ;;  game
   earning-power ;; 赚钱能力？
   ;;  transportation
-  trip-mode                ;;  1: take car, 2: take bus, 3: take taxi 4： take ride 5: take subway 6: take bike  1 私家车 2 公交车 3 出租车 4 顺风车 5 地铁 6 短途自行车
+  trip-mode                ;;  		1 take car 2 take bus 3 take taxi 4 taxi 5 bus 6 顺风车（乘客）
   path ;;一个路径list，由寻路方法获得
   max-speed
   ;; round
@@ -76,11 +78,14 @@ citizens-own[
   still? ;;是否静止，布尔型变量
   time ;; ??
   ;; trip
-  last-commuting-time ;;
+  last-commuting-time ;; 记录上一次tick的通勤时间
   commuting-counter ;; 居民走了多少时间，每次tick时加1
 
   ;; 确定出行方式相关的工作时间
   workTime
+
+  ;; 出行行为选择的变量
+  travelMethod
 
   ;; 用于确定出行方式的效益模型
   income       ;; 实际收入值
@@ -90,9 +95,14 @@ citizens-own[
   age          ;; 实际年龄值
   occupation   ;; 1 学生，2 工人， 3 公务员，4 员工， 5 自由职业者， 6 退休者
   sex          ;; 0 男， 1女
+
+  ;; 用于顺风车（司机）
+  isOrdered? ;; 当前司机是否被预定
+  occupiedNum ;; 当前司机匹配乘客人数
+  pathList ;; 路径列表，第一个元素为司机路径，第二个元素为乘客路径;在适当时候将pathList的元素上处理机path
 ]
 
-;; 传统出租车
+;; 出租车
 taxies-own [
   ;;  transportation
   trip-mode                ;;  4: taxi
@@ -100,7 +110,7 @@ taxies-own [
   max-speed
   ;;  round
   is-ordered? ;; 是否被预定
-  is-occupied? ;; 是否有乘客
+  is-occupied? ;; 是被乘客占用（乘客上车）
   speed
   advance-distance
   still? ;; 是否静止，布尔型变量
@@ -176,8 +186,8 @@ to setup-globals
   set acceleration         0.25
   set deceleration         0.5
   set event-duration       720
-  set bus-duration         1 ;; ??
-  set taxi-duration        1 ;; ??
+  set bus-duration         2 ;; ??
+  set taxi-duration        2 ;; ??
   set buffer-distance      1.0 ;; 缓冲距离为一个砖块
   set money                0
 end
@@ -249,7 +259,7 @@ to setup-estates
   ask n-of residence-num residence-district[
     set land-type "residence" ;; 随机选择住所区域的patch变为住所
   ]
-  set residences patch-set patches with [land-type = "residence"] ;; 设置breed
+  set residences patch-set patches with [land-type = "residence"] ;; 设置patch-set
   ask residences [
     set pcolor yellow
     set num 0 ;; num是一个标记，0代表residence，1代表company
@@ -386,8 +396,10 @@ to setup-citizen
   ;; 设置工作时间(h为单位)
   set workTime random-normal 8 2
 
-
-
+  ;; 设置顺风车（司机）相关
+  set isOrdered? false
+  set occupiedNum 0
+  set pathList []
 
 
   ;;  set transportation properties
@@ -397,12 +409,16 @@ to setup-citizen
   set speed               0
   set advance-distance    0 ;; 距离他人为0
   set still?              false ;; 开始行走
-  set time                0 ;; ??
-  set last-commuting-time nobody ;; ??
+  set time                0 ;; 设置停止时间为2
+  set last-commuting-time nobody ;; 控制event-duration
   set commuting-counter   0 ;; 通勤计次，每一个ticks加1
 
   ;;  set trip-mode 居民出行行为选择
   set-trip-mode
+
+  if (trip-mode = 3 or trip-mode = 6)[
+        halt 2  ;; 匹配出租车或顺风车
+  ]
 
   ;;  set path
   set path find-path residence company trip-mode ;; find-path是一个函数，输入三个参数：起点，终点，出行方式, 返回一个list是结点组成的路径
@@ -411,7 +427,7 @@ to setup-citizen
   face first path ;; 设置居民朝向为第一个结点
   let controller         self ;; 将self（也就是居民）赋值给controller变量,controller也就是人
   let controller-heading heading
-  hide-turtle            ;; debug 隐藏当前居民controller，只显示mapping-citizen
+  ;;hide-turtle            ;; debug 隐藏当前居民controller，只显示mapping-citizen
 
   hatch-mapping-citizens 1 [ ;; 本residence孵化一个mapping-citizen，并：
     set shape          "person business"
@@ -453,19 +469,33 @@ to advance [len]
   ]
 end
 
-;; 停duartion的时间
+;; 停duartion的时间 若duration为0，则是设置其still为true和speed为0 time就是需要停止的变量
 to halt [duration]
   set time   duration
   set still? true
   set speed  0
 end
 
-;;  taxi-related 返回一个taxi主体，若没找到就返回null
+;;  taxi-related 返回一个taxi主体，若没找到就返回null, 由citizen调用
 to-report find-taxi
   let this             self
   let available-taxies ((taxies with [is-ordered? = false and is-occupied? = false]) in-radius taxi-detect-distance) ;; 在taxi-detect-distance范围内找一个没被预定且没被占用的taxi
   ifelse count available-taxies > 0 [
-    report min-one-of available-taxies [distance this]
+    report min-one-of available-taxies [distance this] ;; 返回距离最近的出租车
+  ][
+    report nobody
+  ]
+end
+
+;;返回一个顺风车司机主体，若没找到就返回null, 由citizen调用
+to-report findRideDriver
+  let this self
+  ;; 合乘匹配
+  ;; todo: 按照设计算法实现
+  let availableDrivers ((citizens with [trip-mode = 7 and isOrdered? = false and occupiedNum < 2]) in-radius 50)
+  ifelse count availableDrivers > 0 [
+    ;;show "find it"
+    report min-one-of availableDrivers [distance this] ;; 返回距离最近的顺风车司机
   ][
     report nobody
   ]
@@ -510,11 +540,12 @@ to passengers-off
   ]
 end
 
-;; 居民的上车动作，由citizen调用
+;; 居民的上车动作，由各个主体调用！
+;; todo:顺风车下车逻辑（取消绑定逻辑）
 to passengers-on-off
   ;; bus
   if trip-mode = 2 [ ;; 若居民出行方式为take bus
-    if (length path > 0 and distance first path > 1.0001)[ ;; 当居民距离第一个路径结点距离大于一个patch时，不等待
+    if (length path > 0 and distance first path > 1.0001)[ ;; 当居民距离第一个路径结点距离大于一个patch时，居民静止
       halt 0
     ]
   ]
@@ -522,17 +553,36 @@ to passengers-on-off
     halt bus-duration ;; 公交车经停等待
     passengers-off ;; 乘客在该站下车
   ]
-  ;; taxi
-  if trip-mode = 3 [ ;; 主体为出租车
-    if (patch-here = [patch-here] of company or patch-here = [patch-here] of residence) [ ;; 若出租车在公司或住所（即已到达终点）
+
+  ;; 主体为出租车（乘客）
+  if trip-mode = 3 [ ;; 主体为居民，出行方式为出租车（乘客）
+    if (patch-here = [patch-here] of company or patch-here = [patch-here] of residence) [ ;; 若居民已到达公司或住所（即已到达终点）
       set trip-mode 2 ;; 设置出行方式为take bus
-      ;; 下出租车
+      ;; 下出租车, 解除绑定后出租车可自由移动了
       ask one-of taxi-link-neighbors [
         if (is-occupied?)[
           ask my-taxi-links [die]
           set is-occupied? false
           set still?       false
           set-path
+          face first path
+        ]
+      ]
+    ]
+  ]
+
+  ;; 主体为顺风车（乘客）
+  if trip-mode = 6 [
+      if (patch-here = [patch-here] of company or patch-here = [patch-here] of residence) [ ;; 若居民已到达公司或住所（即已到达终点）
+      set trip-mode 2 ;; 设置出行方式为take bus
+      ;; 下出租车
+      ask one-of rideSharingLink-neighbors [
+        ;; 只剩下一个乘客
+        if (occupiedNum < 2)[
+          ask my-rideSharingLinks [die] ;; 所有link删除
+          set occupiedNum  occupiedNum - 1
+          set still?       false
+          set-path       ;; todo:设置司机的路径为原来的路径
           face first path
         ]
       ]
@@ -562,6 +612,8 @@ to set-speed
   if (count taxi-link-neighbors > 0)[ ;; 若有出租车
     set my-taxi       one-of [map-link-neighbors] of one-of taxi-link-neighbors ;; 从taxi-link的主体中选出任意一个的任意一个map-link-neighbor
   ]
+
+  ;; todo:顺风车
 
   ifelse patch-ahead 1 != nobody [ ;; 若不是边界（patch-ahead: 返回沿调用海龟当前方向前方给定距离处的单个瓦片。如果超出世界范围，瓦片不存在，则返回nobody）
     set turtles-ahead (turtle-set (other turtles-here) (turtles-on patch-ahead 1)) ;; 将前方patch上的所有海龟和当前主体所在地块的除了当前主体的其他海龟作为一个turtle set (turtle-set value1 value2 ...为一个并集的关系，参数可以为多个)
@@ -629,24 +681,28 @@ to set-speed
 
 end
 
-;; 控制居民出行和工作、休息时间
+;; 控制居民出行和工作、休息时间，控制私家车、出租车休息时间（set-duration是在到达目的地调用的）
 to set-duration
-  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3)[           ;; 若主体为居民
-    ;;  record
+  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3 or trip-mode = 6)[           ;; 若主体为居民
+    ;;  record 处理记录数据
     ifelse last-commuting-time = nobody [                             ;; 若上次保存的通勤时间为null（尚未初始化）
       set last-commuting-time commuting-counter                       ;; 设置上次保存的通勤时间为通勤计次
     ][                                                                ;; 若通勤时间不为null
       set last-commuting-time commuting-counter - event-duration      ;; 设置上次保存的通勤时间为通勤计次减事件循环时间
     ]
     set   commuting-counter   0
+
     ;;  halt
     halt event-duration ;; 在公司，停止
   ][
-    ifelse (trip-mode = 4)[                 ;; taxi
+    ifelse (trip-mode = 4)[                 ;; taxi在到达目的地后等待一段时间再出发
       halt taxi-duration
     ][
       if (trip-mode = 5)[                   ;; bus
         halt bus-duration
+      ]
+      if (trip-mode = 7)[                   ;; 顺风车（司机）
+        halt taxi-duration ;; 到达目的地
       ]
     ]
   ]
@@ -662,12 +718,21 @@ to set-static-shape
 end
 
 ;; 由setup-citizens调用，将controller下的map-link-neighbors也就是交通工具（私家车）初始化形状
+;; todo:顺风车的形状
 to set-moving-shape
   if trip-mode = 1 [
     ask map-link-neighbors [
       set shape "car top"
     ]
   ]
+
+  if trip-mode = 7 [
+    ask map-link-neighbors [
+      set shape "car"
+      set color orange
+    ]
+  ]
+
 end
 
 ;; 确定出行方式，调用者为citizens，输入出行距离和工作时间
@@ -858,6 +923,7 @@ to-report getTravelMethod [dist myWorkTime]
 end
 
 ;; 设置出行方式（可从这里修改代码）
+;; todo:顺风车mode
 to set-trip-mode
   if breed = citizens [ ;; 只有一个判断
     ;; 如果当前patch为公司或住所
@@ -872,15 +938,27 @@ to set-trip-mode
       ]
 
       let dist length find-path departure destination 1
-      let travelMethod getTravelMethod dist workTime
+      ;; 进行出行方式选择
+      set travelMethod getTravelMethod dist workTime
       ;;show travelMethod 调试
     ]
 
-    ;; 若有车则选择私家车出行
-    ifelse has-car? [
-      set trip-mode 1
+    ;; 若选择私家车（1）出行且有车 todo:顺风车（司机）
+    if travelMethod = 1 [
+      if has-car? = true [
+        set trip-mode 1
+        set-max-speed car-speed
+      ]
+    ]
+
+    ;; 若选择顺风车（司机）出行
+    if travelMethod = 7 [
+      set trip-mode 7
       set-max-speed car-speed
-    ][ ;; 若无车,则先找出租车
+    ]
+
+    ;; 若选择出租车（3）出行
+    if travelMethod = 3 [ ;; 若出行方式为出租车
       let target-taxi find-taxi ;; 找出租车，赋给target-taxi
       ifelse (target-taxi != nobody) [ ;;若找到出租车
         let this self ;;self为citizen
@@ -895,32 +973,115 @@ to set-trip-mode
             set path [] ;; 重新设置出租车的的路径属性为空列表
           ]
           set is-ordered? true ;; 设置该出租车为is-ordered属性为true
-          create-taxi-link-with this [ ;; 设置连接乘客和出租车的taxi-link
+          create-taxi-link-with this [ ;; 设置连接乘客和的taxi-link (在未到达当前地块是就已连接link，在到达地块后才绑定)
             set shape     "taxi-link-shape" ;; shape为一个字符串
             set color     sky ;; 颜色为天蓝色
             set thickness 0.05 ;; 厚度
           ]
         ]
         set trip-mode 3 ;; 3为take taxi
-        set-max-speed car-speed
+        set-max-speed car-speed ;; 居民带着移动
       ][;; 若没找到出租车
         set trip-mode 2 ;; 设置出行方式为乘公交车
         set-max-speed person-speed
       ]
     ]
+
+    ;; 若选择顺风车（乘客）（4）方式出行 todo:
+    if travelMethod = 4 [
+      let targetDriver findRideDriver ;; 找顺风车司机
+      ifelse (targetDriver != nobody) [ ;;若找到司机
+        ;;show ("find it")
+        let this self ;;self为citizen
+        ask targetDriver [
+          ;;  检查司机是否已到达（在）乘客的出发地
+          ifelse (patch-here != [patch-here] of this)[ ;; 当司机不在在乘客的瓦片上时
+            let departure   one-of vertices-on patch-here ;; 司机所在位置设为起点
+            let destination one-of vertices-on [patch-here] of this ;; 乘客所在位置设为终点
+            set path        find-path departure destination 1 ;; 寻路，返回一个路径顶点集合
+            face first path ;; 将乘客朝向指向第一个路径顶点
+
+            ;; !important
+            ;;ask this [halt 0] ;; 让乘客静止
+          ][ ;; 当司机在在乘客的瓦片上时
+            set path [] ;; 重新设置司机的的路径属性为空列表
+            ;;ask this [set still? false]
+          ]
+
+          set isOrdered? true ;; 设置顺风车为isOrdered属性为true
+          create-rideSharingLink-with this [ ;; 设置连接乘客和司机的rideshareLink
+            set shape     "rideSharingLink-shape" ;; shape为一个字符串
+            set color     orange ;; 颜色为橙色
+            set thickness 0.05 ;; 厚度
+          ]
+        ]
+        set trip-mode 6 ;; trip-mode为6表示顺风车（乘客）
+        set-max-speed car-speed
+      ][;; 若没找到顺风车
+        set trip-mode 2 ;; 设置出行方式为乘公交车
+        ;;show ("not found")
+        set-max-speed person-speed
+      ]
+    ]
+    ;; todo 待完善，完成各个主体开发后
+    if travelMethod = 2 or travelMethod = 5 or travelMethod = 6 [
+      set trip-mode 2 ;; 设置出行方式为乘公交车
+      set-max-speed person-speed
+    ]
   ]
 end
 
-;; 设置路径
+;; 设置路径，调用者为居民、公交车主体、顺风车主体
+;; todo：顺风车添加乘客路径逻辑
 to set-path
   let origin-point     nobody
   let terminal-point   nobody
-  let mode             0
+  let mode             0 ;; mode为临时变量
   if breed = citizens [
     set origin-point   residence
     set terminal-point company
     set mode           trip-mode
   ]
+
+  ;; 顺风车（司机）
+  if breed = citizens and travelMethod = 7 [
+    set origin-point   one-of vertices-on patch-here ;; 顺风车（乘客）
+    ifelse (isOrdered? = true)[ ;; 在乘客下出租车后, 若已有预定
+      set terminal-point [patch-here] of one-of rideSharingLink-neighbors ;; 将目的地设置为某个绑定的居民
+    ][
+      ;; 若没有被预定
+      ;; 若没有被占用
+      if occupiedNum = 0 [
+        set terminal-point company ;; 将目的地设置为该司机的目的地 todo:判断司机目的地
+      ]
+    ]
+
+    ifelse (terminal-point = patch-here) [ ;; 若到达目的地
+      if [land-type] of patch-here = "residence" or [land-type] of patch-here = "company" [
+
+        ;; 若无人占用，则目的地为司机自己的目的地
+        if occupiedNum = 0 [
+          ifelse patch-here = company [
+            set terminal-point residence
+          ][
+            set terminal-point company
+          ]
+        ]
+
+        ;; 若有人占用
+        if occupiedNum = 1 [
+          set terminal-point [patch-here] of one-of rideSharingLink-neighbors ;; 将目的地设置为某个绑定的居民所在地
+        ]
+
+      ]
+    ][ ;; 若未到目的地
+      set terminal-point one-of vertices-on terminal-point  ;;
+    ]
+
+    set mode           7 ;; 4代表出租车
+  ]
+
+  ;; 出租车
   if breed = taxies [
     set origin-point   one-of vertices-on patch-here
     ifelse (is-ordered? = true)[ ;; 若已有预定
@@ -935,15 +1096,19 @@ to set-path
     ]
     set mode           4 ;; 4代表出租车
   ]
+
+  ;; 公交
   if breed = buses [
     set origin-point   origin-station
     set terminal-point terminal-station
     set mode           5
   ]
 
+  ;; 若在出发地，设置路径
   if (patch-here = [patch-here] of origin-point)[
     set path find-path origin-point terminal-point mode
   ]
+  ;; 若在目的地，设置路径
   if (patch-here = [patch-here] of terminal-point)[
     set path find-path terminal-point origin-point mode
   ]
@@ -960,50 +1125,115 @@ to watch-traffic-light
   ]
 end
 
-;; stay:由citizens bus taxi调用
+;; stay:由citizens bus taxi调用,当still?=true时
+;; todo: 顺风车绑定逻辑
 to stay
-  if (time = 1)[ ;; 若达到通勤事件周期最后
-    if (trip-mode != 3)[ ;; 若模式不是take taxi
+  ;; 若距离移动行为还有一个tick时
+  if (time = 1)[
+
+    if (trip-mode != 3)[ ;; 若模式不是take taxi时 （这样乘客才能进行路径选择） !important
       ;; set path
-      set-trip-mode ;; 重新进行路径选择
-      set-path
-      if (trip-mode != 3)[
-        set time time - 1
-        set still? false
+
+      ;; 当为顺风车乘客
+      ifelse (trip-mode = 6) [
+        ;; 不会重新进行出行方式选择
+        set-path
+      ][
+        set-trip-mode ;; 重新进行出行方式选择
+        set-path
+        ;; 若重新进行路径选择后，不是出租车（乘客）,也不是顺风车（乘客）
+        if (trip-mode != 3 and trip-mode != 6)[
+          set time time - 1 ;; time为0
+          set still? false ;; 可以让乘客移动，出租车绑定在乘客身上（!important）
+        ]
       ]
     ]
 
-    ;; citizen
+    ;; 调用者为居民
     if breed = citizens [
       ifelse (trip-mode = 3)[ ;; 若居民的出行方式为take taxi
         let this      self
+        ;; 找到link的出租车
         let link-taxi one-of taxi-link-neighbors
+        ;;若出租车已被预定
         if ([is-ordered?] of link-taxi = true)[
+          ;; 若出租车已经在居民所在地
           if ([patch-here] of link-taxi = patch-here)[
+            ;; 对绑定的出租车
             ask link-taxi [
-              halt 0
-              move-to patch-here
+              halt 0 ;; 出租车的still?设置为true和speed设置为0, time设置为0
+              move-to patch-here ;; 将出租车移到瓦片中心
+              ;; 设置未被预定，已被占用
               set is-ordered?  false
               set is-occupied? true
+              ;; 改变出租车头
               set heading      [heading] of this
             ]
-            ask one-of my-taxi-links [tie]
+            ;; 无向链绑定（链的end1和end2端点捆绑在一起）根海龟移动时，叶海龟也沿相同的方向移动相同的距离，无向链互为根海龟、叶海龟--让乘客带着出租车移动
+            ask one-of my-taxi-links [tie] ;;my-links:返回与调用者连接的所有无向链组成的主体集合。
+            ;; 在公司赚钱
             if (patch-here = [patch-here] of company)[
               set money money + earning-power
             ]
+            ;; 朝向路径第一个结点
             face first path
-            set time time - 1
+            set time time - 1 ;; time变成0
+            ;; 取消静止
             set still? false
           ]
         ]
       ][
-        if (patch-here = [patch-here] of company)[ ;; 当到达目的地时
-          set money money + earning-power
+        ;; 若居民出行方式为顺风车（乘客）
+        if trip-mode = 6 [
+          let this      self
+          ;; 找到link的出租车
+          let linkDriver one-of rideSharingLink-neighbors
+          ;;若顺风车已被该居民预定
+          if ([isOrdered?] of linkDriver = true)[
+
+            ;; 若顺风车到达居民所在地
+            if ([patch-here] of linkDriver = patch-here)[
+              ;; 对绑定的出租车
+              ask linkDriver [
+                halt 0 ;; 顺风车的still设置为true和speed设置为0
+                move-to patch-here ;; 将顺风车移到瓦片中心
+
+                ;; 设置未被预定，已被占用
+                set isOrdered?  false
+                show "arrived"
+                if occupiedNum < 2 [
+                  set occupiedNum  occupiedNum + 1;
+                ]
+                ;; 改变顺风车头
+                set heading      [heading] of this
+              ]
+              ;; 无向链绑定（链的end1和end2端点捆绑在一起）根海龟移动时，叶海龟也沿相同的方向移动相同的距离，无向链互为根海龟、叶海龟
+              ask one-of my-rideSharingLinks [tie]
+              ;; 在公司赚钱
+              if (patch-here = [patch-here] of company)[
+                set money money + earning-power
+              ]
+              ;; 朝向路径第一个结点
+              face first path
+              set time time - 1 ;; time变成0
+              ;; 取消静止（以便乘客移动）
+              set still? false
+            ]
+          ]
         ]
-        face first path
-        set-moving-shape ;; 形状变回原样
+
+        ;; 其他出行方式
+        if trip-mode != 6 and trip-mode != 7[
+          if (patch-here = [patch-here] of company)[ ;; 当到达目的地时
+            set money money + earning-power
+          ]
+          face first path
+          set-moving-shape ;; 形状变回原样
+        ]
       ]
     ]
+
+
 
     ;; bus
     if breed = buses [
@@ -1031,40 +1261,69 @@ to stay
 
     ;; taxi
     if breed = taxies [
+
       ifelse (is-ordered?)[
+        ;; 若已被预定，则设置静止
         halt 0
+
       ][
+        ;; 若未被预定（已经占用或无人预定），则设置朝向
         face first path
       ]
     ]
-  ]
-  if time > 1 [
-    set time time - 1
-  ]
-  if (time = 0 and breed = taxies and is-ordered? = true and still? = true)[
-    if ([pcolor] of patch-here != 19)[
-      set still? false
+
+    ;; 顺风车车主
+    if trip-mode = 7 [
+
+      ifelse (isOrdered?)[
+        ;; 若已被预定，则设置静止
+        halt 0
+      ][
+        ;; 若未被预定（已经占用或无人预定），则设置朝向
+        face first path
+      ]
     ]
+
+  ]
+
+
+
+  ;; 计次
+  if time > 1 [
+    set time time - 1 ;;time是停止的时间,每次tick减去1
+  ]
+  ;; 停止时间到，出租车被预订且处于静止状态，则出租车开始移动 (!important)
+  if (time = 0 and breed = taxies and is-ordered? = true and still? = true)[
+      set still? false
+  ]
+  ;; 停止时间到，顺风车被预订且处于静止状态，则顺风车开始移动
+  if (time = 0 and trip-mode = 6 and isOrdered? = true and still? = true)[
+      set still? false
   ]
 end
 
 ;; 居民、出租车、公交车的移动 由progress调用
+;; todo:
 to move
-  set-moving-shape
+  set-moving-shape ;; 设置形状为移动形状
   set-speed ;; 设定当前主体的速度
   set advance-distance speed ;; 设置一次tick的前进距离为speed
   while [advance-distance > 0 and length path > 1] [ ;; 当path列表的数量大于1
     ;;watch-traffic-light
     let next-vertex first path ;; 找到下一个路径结点
-    if (distance next-vertex < 0.0001) [ ;; 当主体距离路径结点距离小于0.0001
+    if (distance next-vertex < 0.0001) [ ;; 若主体距离路径下一个结点距离小于0.0001
       set path but-first path ;; 将路径结点列表的第一个剔除
       set next-vertex first path ;; 将下一个结点作为next-vertex
+      ;; 处理当前主体的上下车关系
       passengers-on-off
     ]
+    ;; 若主体没设置成静止
     ifelse not still? [
       face next-vertex
+      ;; 前进
       advance distance next-vertex
     ][
+      ;; 不前进
       set advance-distance 0
     ]
   ]
@@ -1072,12 +1331,13 @@ to move
   if (length path = 1)[ ;; 列表的第一个结点为终点(即差一步到达终点)
     while [advance-distance > 0 and length path = 1][
       ;;watch-traffic-light
+      ;; 设置该终点为下一个结点
       let next-vertex first path
       face next-vertex
       ifelse (distance next-vertex < 0.0001) [  ;; arrived at destination 到达终点
         set path []
         passengers-on-off
-        ;; wait
+        ;; 静止一段时间：居民工作，休息
         set-duration
         ;; set default shape
         set-static-shape;; 变化形状为静止是的形状
@@ -1090,9 +1350,12 @@ end
 
 ;;  uniform controller
 to progress
+
   ;; 居民
-  ask citizens [
+  ;; 除了顺风车司机以外的居民
+  ask citizens with[trip-mode != 7] [
     set commuting-counter commuting-counter + 1 ;; 所有citizens自身的通勤计次加1
+
     if (count bus-link-neighbors = 0)[ ;; 当旁边没有公车时
       ;; watch-traffic-light ;; 判断是否在信号灯下并执行相应动作（会设置still）
       ifelse still? [ ;; 若still为true则为在信号灯下停止
@@ -1104,6 +1367,7 @@ to progress
   ]
   ;; 出租车
   ask taxies [
+    ;; 如果没被占用，就移动；若被占用，就居民带着他移动
     if (is-occupied? = false)[ ;; 若没被占用
       ;;watch-traffic-light
       ifelse still? [
@@ -1113,6 +1377,22 @@ to progress
       ]
     ]
   ]
+
+  ;; 顺风车（司机）
+  ask citizens with[trip-mode = 7] [
+    ;;set commuting-counter commuting-counter + 1 ;; 所有citizens自身的通勤计次加1
+
+    ;; 如果没被占用，就移动；若被占用，就居民带着他移动
+    if (occupiedNum = 0)[ ;; 若没被占用
+      ;;watch-traffic-light
+      ifelse still? [
+        stay
+      ][
+        move
+      ]
+    ]
+  ]
+
   ;; 公交车
   ask buses [
     ;;watch-traffic-light
@@ -1140,7 +1420,7 @@ end
 to go
   progress
   mouse-manager
-  change-traffic-light
+  ;;change-traffic-light
   record-data
   update-plot
   tick
@@ -1208,6 +1488,7 @@ to add-taxi
       set controller         self
       hide-turtle            ;; debug
     ]
+    ;; 视图层的taxi
     sprout-mapping-taxies 1 [
       set shape              "van top"
       set color              yellow
@@ -1412,6 +1693,7 @@ to initialize-single-source [ source ]
   ]
 end
 
+;; 由迪杰斯特拉算法调用
 to relax [u v w]
   let new-weight ([weight] of u + [cost] of w)
   if [weight] of v > new-weight [
@@ -2207,6 +2489,17 @@ Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 
 dotted
+0.0
+-0.2 0 0.0 1.0
+0.0 1 4.0 4.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
+
+ridesharinglink-shape
 0.0
 -0.2 0 0.0 1.0
 0.0 1 4.0 4.0
