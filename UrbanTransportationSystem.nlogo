@@ -100,6 +100,7 @@ citizens-own[
   isOrdered? ;; 当前司机是否被预定
   occupiedNum ;; 当前司机匹配乘客人数
   pathList ;; 路径列表，第一个元素为司机路径，第二个元素为乘客路径;在适当时候将pathList的元素上处理机path
+  lastStayAt ;; 记录上次呆过的地方，用于区分顺风车司机的目的地是家还是公司. 0 表示家，1表示公司
 ]
 
 ;; 出租车
@@ -162,6 +163,7 @@ to setup
   setup-estates
   setup-map
   setup-citizens
+  setupTaxi
   reset-ticks
 end
 
@@ -265,6 +267,7 @@ to setup-estates
     set num 0 ;; num是一个标记，0代表residence，1代表company
   ]
   ;;  companies
+  ;; 注意：companies的数据类型为patch-set,而不是vertices!
   ask n-of company-num company-district[
     set land-type "company"
   ]
@@ -328,7 +331,9 @@ to setup-citizen
   ]
   ask my-company [ set num num + 1 ]
 
+
   ;;  set basic properties
+  ;; residence和company都是vertex类型变量，而不是patch变量！
   set residence         one-of vertices-on patch-here
   set company           one-of vertices-on my-company
   set earning-power     5 ;; ??
@@ -416,8 +421,14 @@ to setup-citizen
   ;;  set trip-mode 居民出行行为选择
   set-trip-mode
 
+  ;; 若选择乘出租车或顺风车（乘客）出行，等待一段时间匹配出租车或顺风车
   if (trip-mode = 3 or trip-mode = 6)[
-        halt 2  ;; 匹配出租车或顺风车
+        halt 2
+  ]
+
+  ;; 顺风车（司机）初始化上次呆过的地方为家
+  if (trip-mode = 7) [
+    set lastStayAt 0
   ]
 
   ;;  set path
@@ -451,6 +462,14 @@ to setup-citizens
     sprout-citizens residence-capacity [
       setup-citizen ;;在住所生成居民
     ]
+  ]
+end
+
+to setupTaxi
+  let i 0
+  while [i < 20] [
+    add-taxi
+    set i i + 1
   ]
 end
 
@@ -492,7 +511,7 @@ to-report findRideDriver
   let this self
   ;; 合乘匹配
   ;; todo: 按照设计算法实现
-  let availableDrivers ((citizens with [trip-mode = 7 and isOrdered? = false and occupiedNum < 2]) in-radius 50)
+  let availableDrivers ((citizens with [trip-mode = 7 and isOrdered? = false and time <= 0 and occupiedNum < 1]) in-radius 50) ;; time<=0:当顺风车司机在路上时
   ifelse count availableDrivers > 0 [
     ;;show "find it"
     report min-one-of availableDrivers [distance this] ;; 返回距离最近的顺风车司机
@@ -540,7 +559,7 @@ to passengers-off
   ]
 end
 
-;; 居民的上车动作，由各个主体调用！
+;; 在车上的乘客下车动作，由各个主体调用！
 ;; todo:顺风车下车逻辑（取消绑定逻辑）
 to passengers-on-off
   ;; bus
@@ -580,7 +599,8 @@ to passengers-on-off
         ;; 只剩下一个乘客
         if (occupiedNum < 2)[
           ask my-rideSharingLinks [die] ;; 所有link删除
-          set occupiedNum  occupiedNum - 1
+          set occupiedNum  0 ;; todo:两个人的情况
+          ;; set isOrdered?   false
           set still?       false
           set-path       ;; todo:设置司机的路径为原来的路径
           face first path
@@ -588,6 +608,7 @@ to passengers-on-off
       ]
     ]
   ]
+
 end
 
 ;;
@@ -701,8 +722,25 @@ to set-duration
       if (trip-mode = 5)[                   ;; bus
         halt bus-duration
       ]
-      if (trip-mode = 7)[                   ;; 顺风车（司机）
-        halt taxi-duration ;; 到达目的地
+
+      ;; 顺风车（司机）
+      if (trip-mode = 7)[
+        ifelse (patch-here != [patch-here] of residence and patch-here != [patch-here] of company) [
+          ;;show "not company!"
+          halt taxi-duration ;; 到达乘客的目的地，等待taxi-duration再出发
+        ][
+          ;;show "It is my company!"
+          halt event-duration ;; 顺风车司机到达公司，开始工作
+
+          ;; 记录上次待的地方
+          if [patch-here] of residence = patch-here [
+            set lastStayAt 0
+          ]
+          if [patch-here] of company = patch-here [
+            set lastStayAt 1
+          ]
+
+        ]
       ]
     ]
   ]
@@ -903,7 +941,13 @@ to-report getTravelMethod [dist myWorkTime]
 
   let bikeM 0
 
-  array:set benefitArr 5 mu * bikeS / (lambda * bikeTC + omega * bikeM)
+  ;; 解决零除问题
+  ifelse lambda * bikeTC + omega * bikeM = 0 [
+    array:set benefitArr 5 10000
+  ][
+    array:set benefitArr 5 mu * bikeS / (lambda * bikeTC + omega * bikeM)
+  ]
+
 
   ;; 找出数组中最大元素，即最大效益
   let i 0
@@ -991,7 +1035,6 @@ to set-trip-mode
     if travelMethod = 4 [
       let targetDriver findRideDriver ;; 找顺风车司机
       ifelse (targetDriver != nobody) [ ;;若找到司机
-        ;;show ("find it")
         let this self ;;self为citizen
         ask targetDriver [
           ;;  检查司机是否已到达（在）乘客的出发地
@@ -1001,11 +1044,8 @@ to set-trip-mode
             set path        find-path departure destination 1 ;; 寻路，返回一个路径顶点集合
             face first path ;; 将乘客朝向指向第一个路径顶点
 
-            ;; !important
-            ;;ask this [halt 0] ;; 让乘客静止
           ][ ;; 当司机在在乘客的瓦片上时
-            set path [] ;; 重新设置司机的的路径属性为空列表
-            ;;ask this [set still? false]
+            set path [] ;; 重新设置司机的的路径属性为空列表，然后乘客带着司机移动
           ]
 
           set isOrdered? true ;; 设置顺风车为isOrdered属性为true
@@ -1015,11 +1055,12 @@ to set-trip-mode
             set thickness 0.05 ;; 厚度
           ]
         ]
-        set trip-mode 6 ;; trip-mode为6表示顺风车（乘客）
+        set trip-mode 6 ;; trip-mode为6表示顺风车（乘客
+        ;; show ("find Driver")
         set-max-speed car-speed
       ][;; 若没找到顺风车
         set trip-mode 2 ;; 设置出行方式为乘公交车
-        ;;show ("not found")
+        ;;show ("not found Driver")
         set-max-speed person-speed
       ]
     ]
@@ -1037,48 +1078,45 @@ to set-path
   let origin-point     nobody
   let terminal-point   nobody
   let mode             0 ;; mode为临时变量
+
+  ;; 居民
   if breed = citizens [
-    set origin-point   residence
-    set terminal-point company
-    set mode           trip-mode
-  ]
 
-  ;; 顺风车（司机）
-  if breed = citizens and travelMethod = 7 [
-    set origin-point   one-of vertices-on patch-here ;; 顺风车（乘客）
-    ifelse (isOrdered? = true)[ ;; 在乘客下出租车后, 若已有预定
-      set terminal-point [patch-here] of one-of rideSharingLink-neighbors ;; 将目的地设置为某个绑定的居民
+    ;; 顺风车（司机）,在居民下车后以及顺风车车主结束工作后调用
+    ifelse trip-mode = 7 [
+      set origin-point   one-of vertices-on patch-here ;; 顺风车（乘客）
+      ifelse (isOrdered? = true)[ ;; 在乘客下出租车后, 若已有预定
+        set terminal-point  one-of vertices-on [patch-here] of one-of rideSharingLink-neighbors ;; 将目的地设置为某个绑定的居民
+      ][
+        ;; 若没有被预定
+        ;; 若上次呆的地方为家
+        ifelse lastStayAt = 0 [
+          set terminal-point company ;; 将目的地设置为该司机的目的地
+        ][
+          set terminal-point residence
+        ]
+
+      ]
+
+      ifelse (terminal-point = one-of vertices-on patch-here) [ ;; 若到目的地
+        ;; 若该目的地为家
+        ifelse terminal-point = residence [
+          set terminal-point company
+        ][
+          ;; 若该目的地为公司
+          set terminal-point residence
+        ]
+      ][ ;; 若未到目的地
+        set terminal-point one-of vertices-on terminal-point  ;;
+      ]
+
+      set mode           7 ;; 4代表出租车
     ][
-      ;; 若没有被预定
-      ;; 若没有被占用
-      if occupiedNum = 0 [
-        set terminal-point company ;; 将目的地设置为该司机的目的地 todo:判断司机目的地
-      ]
+      ;; 其他不为顺风车（司机）的居民
+      set origin-point   residence
+      set terminal-point company
+      set mode           trip-mode
     ]
-
-    ifelse (terminal-point = patch-here) [ ;; 若到达目的地
-      if [land-type] of patch-here = "residence" or [land-type] of patch-here = "company" [
-
-        ;; 若无人占用，则目的地为司机自己的目的地
-        if occupiedNum = 0 [
-          ifelse patch-here = company [
-            set terminal-point residence
-          ][
-            set terminal-point company
-          ]
-        ]
-
-        ;; 若有人占用
-        if occupiedNum = 1 [
-          set terminal-point [patch-here] of one-of rideSharingLink-neighbors ;; 将目的地设置为某个绑定的居民所在地
-        ]
-
-      ]
-    ][ ;; 若未到目的地
-      set terminal-point one-of vertices-on terminal-point  ;;
-    ]
-
-    set mode           7 ;; 4代表出租车
   ]
 
   ;; 出租车
@@ -1104,11 +1142,11 @@ to set-path
     set mode           5
   ]
 
-  ;; 若在出发地，设置路径
+  ;; 若在出发地，将路径倒置
   if (patch-here = [patch-here] of origin-point)[
     set path find-path origin-point terminal-point mode
   ]
-  ;; 若在目的地，设置路径
+  ;; 若在目的地，将路径倒置
   if (patch-here = [patch-here] of terminal-point)[
     set path find-path terminal-point origin-point mode
   ]
@@ -1131,23 +1169,29 @@ to stay
   ;; 若距离移动行为还有一个tick时
   if (time = 1)[
 
-    if (trip-mode != 3)[ ;; 若模式不是take taxi时 （这样乘客才能进行路径选择） !important
-      ;; set path
 
-      ;; 当为顺风车乘客
-      ifelse (trip-mode = 6) [
-        ;; 不会重新进行出行方式选择
-        set-path
-      ][
-        set-trip-mode ;; 重新进行出行方式选择
-        set-path
-        ;; 若重新进行路径选择后，不是出租车（乘客）,也不是顺风车（乘客）
-        if (trip-mode != 3 and trip-mode != 6)[
-          set time time - 1 ;; time为0
-          set still? false ;; 可以让乘客移动，出租车绑定在乘客身上（!important）
-        ]
+    ;; 当为顺风车（司机）
+    if (trip-mode = 7) [
+      ;; 不用重新进行路径选择
+      set-path
+      set time time - 1
+      set still? false
+    ]
+
+    ;; 当trip-mode不为3出租车（乘客）和6顺风车（乘客）时，保持原程序逻辑
+    if (trip-mode = 1 or trip-mode = 2 or trip-mode = 4 or trip-mode = 5) [
+      ;; set path
+      set-trip-mode
+      set-path
+      ;; 重新进行出行方式选择后，若不是出租车（乘客）和顺风车（乘客）
+      if (trip-mode != 3 and trip-mode != 6)[
+        set time time - 1
+        set still? false
       ]
     ]
+
+
+
 
     ;; 调用者为居民
     if breed = citizens [
@@ -1200,7 +1244,7 @@ to stay
 
                 ;; 设置未被预定，已被占用
                 set isOrdered?  false
-                show "arrived"
+                ;; show "arrived"
                 if occupiedNum < 2 [
                   set occupiedNum  occupiedNum + 1;
                 ]
@@ -1222,7 +1266,7 @@ to stay
           ]
         ]
 
-        ;; 其他出行方式
+        ;; 除了出租车（乘客）、顺风车（乘客）和顺风车（司机）的其他出行方式
         if trip-mode != 6 and trip-mode != 7[
           if (patch-here = [patch-here] of company)[ ;; 当到达目的地时
             set money money + earning-power
@@ -1281,6 +1325,7 @@ to stay
       ][
         ;; 若未被预定（已经占用或无人预定），则设置朝向
         face first path
+        set-moving-shape
       ]
     ]
 
@@ -1704,6 +1749,7 @@ to relax [u v w]
   ]
 end
 
+;; source 和 target都为vertex?
 to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi   4: taxi   5: bus
   initialize-single-source source
   let Q vertices
@@ -1730,7 +1776,9 @@ to dijkstra [source target mode] ;; mode: 1: take car, 2: take bus, 3: take taxi
   ]
 end
 
+
 ;; 寻路算法，使用迪杰斯特拉算法寻找路径，输入为三个参数：起点，终点，和出行方式：1: take car, 2: take bus, 3: take taxi   4: taxi   5: bus 返回路径结点集合
+;; source 和 target都为vertex?
 to-report find-path [source target mode]
   dijkstra source target mode ;; 使用迪杰斯特拉算法
   let path-list (list target) ;; 创建一个list变量，为多个终点
@@ -1872,7 +1920,7 @@ taxi-detect-distance
 taxi-detect-distance
 0
 50
-15.0
+50.0
 1
 1
 NIL
