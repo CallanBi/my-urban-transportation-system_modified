@@ -36,6 +36,10 @@ globals[
   person-speed             ;;  person
   car-speed                ;;  car
   bus-speed                ;;  bus
+
+  subwaySpeed              ;;  地铁的速度
+  bikeSpeed                ;;  短途自行车的速度
+
   acceleration
   deceleration
   event-duration           ;;  person: work and rest
@@ -110,6 +114,9 @@ citizens-own[
 
   ;; 顺风车司机特有，两个乘客在一个地点同时合乘情况下的互斥信号量 0：资源被占用 1：资源可用数量为1
   mutex
+
+  ;; 用于地铁的换乘倒计时
+  subwayTransferCountdown
 
 ]
 
@@ -193,8 +200,12 @@ end
 to setup-globals
   ;; speed：相对于砖块
   set person-speed         0.085
-  set car-speed            0.4385
-  set bus-speed            0.2424028
+  set car-speed            0.4385            ;; 私家车、出租车、顺风车速度为26.31km/h
+  set bus-speed            0.2424028         ;; 公交速度为私家车速度的55.28%
+
+  set subwaySpeed          0.583333333333333 ;; 地铁速度为35km/h
+  set bikeSpeed            0.16              ;; 自行车速度为10km/h
+
   set acceleration         0.25
   set deceleration         0.5
   set event-duration       720
@@ -441,6 +452,11 @@ to setup-citizen
         halt 2
   ]
 
+  ;; 若出行方式为地铁
+  if (trip-mode = 9) [
+    set subwayTransferCountdown 5
+  ]
+
   ;; 顺风车（司机）和顺风车（乘客）初始化上次呆过的地方为家
   set lastStayAt 0
 
@@ -450,6 +466,8 @@ to setup-citizen
   ;; 设置顺风车司机的两个乘客在一个地点同时合乘情况下的互斥信号量
   set mutex 1
 
+
+
   ;;  set path
   set path find-path residence company trip-mode ;; find-path是一个函数，输入三个参数：起点，终点，出行方式, 返回一个list是结点组成的路径
 
@@ -457,13 +475,13 @@ to setup-citizen
   face first path ;; 设置居民朝向为第一个结点
   let controller         self ;; 将self（也就是居民）赋值给controller变量,controller也就是人
   let controller-heading heading
-  ;;hide-turtle            ;; debug 隐藏当前居民controller，只显示mapping-citizen
+  hide-turtle            ;; debug 隐藏当前居民controller，只显示mapping-citizen
 
   hatch-mapping-citizens 1 [ ;; 本residence孵化一个mapping-citizen，并：
     set shape          "person business"
     set color          color ;; 将residence的颜色设置为mapping-citizen的颜色
     set heading        heading
-    ;; 为了区分citizen和mapping-citizen，所以设置一个位移
+    ;; 为了使居民靠道路右侧出行，设置一个位移偏置
     rt 90 ;; 右转90度
     fd 0.25 ;; 前进0.25
     lt 90 ;; 左转90度
@@ -484,6 +502,7 @@ to setup-citizens
   ]
 end
 
+;; 初始化时添加Taxi
 to setupTaxi
   let i 0
   while [i < 20] [
@@ -808,7 +827,7 @@ end
 
 ;; 控制居民出行和工作、休息时间，控制私家车、出租车休息时间（set-duration是在到达目的地调用的）
 to set-duration
-  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3 or trip-mode = 6)[           ;; 若主体为居民
+  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3 or trip-mode = 6 or trip-mode = 8 or trip-mode = 9)[           ;; 若主体为居民
     ;;  record 处理记录数据
     ifelse last-commuting-time = nobody [                             ;; 若上次保存的通勤时间为null（尚未初始化）
       set last-commuting-time commuting-counter                       ;; 设置上次保存的通勤时间为通勤计次
@@ -891,189 +910,225 @@ to set-moving-shape
     ]
   ]
 
+  ;; 若为顺风车司机
   if trip-mode = 7 [
     ask map-link-neighbors [
-      set shape "car"
+      set shape "car top"
       set color orange
     ]
   ]
 
+  ;; 若为地铁
+  if trip-mode = 8 [
+    ask map-link-neighbors [
+      set shape "train passenger car"
+      set color violet ;; 紫色
+    ]
+
+  ]
+
+  ;; 若为短途自行车
+  if trip-mode = 9 [
+    ask map-link-neighbors [
+      set shape "bike"
+      set color black
+    ]
+
+  ]
+
 end
 
-;; 确定出行方式，调用者为citizens，输入出行距离和工作时间
-to-report getTravelMethod [dist myWorkTime]
+;; 确定出行方式，调用者为citizens，输入出行距离和工作时间；setZeroMethod为不考虑的出行方式；lastArr为上次的效益数组，若第一次初始化，默认为nobody
+to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
   ;; 出行方式：1 私家车 2 公交车 3 出租车 4 顺风车(乘客) 5 地铁 6 短途自行车 7 顺风车(司机)
 
   ;; 使用array保存效益，返回最大效益的下标
   let benefitArr array:from-list n-values 7 [0]
 
-  ;; 权重计算
-  let lambda 0.677 * income + 0.156 * hasCar + 0.167 * education
-  let mu -0.34 * age + 0.642 * income + 0.063 * occupation + 0.635 * hasCar
-  let omega -0.171 * sex + 0.012 * income + 1.159 * education
+  ;; 若没有上次的效益数组（即没有出现递归）
+  ifelse lastArr = nobody [
+    ;; 权重计算
+    let lambda 0.677 * income + 0.156 * hasCar + 0.167 * education
+    let mu -0.34 * age + 0.642 * income + 0.063 * occupation + 0.635 * hasCar
+    let omega -0.171 * sex + 0.012 * income + 1.159 * education
 
-  if has-car? = true [
-    ;; 计算私家车的效益
-    let carS  1
-    let carTC (dist / 60 - dist / 26.31) * 1.5
-    let carM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime
+    if has-car? = true [
+      ;; 计算私家车的效益
+      let carS  1
+      let carTC (dist / 60 - dist / 26.31) * 1.5
+      let carM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime
 
-    array:set benefitArr 0 mu * carS / (lambda * carTC + omega * carM)
-  ]
-
-
-  ;; 计算公交车的效益
-  let busS  1 - (2.4 / 2.5) ^ 5
-  let busTC 6 / 60 + dist / 16 - dist / 20
-  let busM nobody
-  if dist > 0 and dist <= 10 [
-    set busM 2
-  ]
-  if dist > 10 and dist <= 15 [
-    set busM 3
-  ]
-  if dist > 15 and dist <= 20 [
-    set busM 4
-  ]
-  if dist > 20 and dist <= 25 [
-    set busM 5
-  ]
-  if dist > 25 and dist <= 30 [
-    set busM 6
-  ]
-  if dist > 30 and dist <= 35 [
-    set busM 7
-  ]
-  if dist > 35 and dist <= 40 [
-    set busM 8
-  ]
-  if dist > 40 [
-    set busM 9
-  ]
-
-  array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM)
-
-  ;; 计算出租车效益
-  let taxiS  1
-  let taxiTC (3 / 60 + dist / 60 - dist / 26.31) * 1.3
-
-  let taxiM nobody
-  if dist > 0 and dist <= 3 [
-    set taxiM 10
-  ]
-  if dist > 3 and dist <= 15 [
-    set taxiM 10 + 2 * (dist - 3)
-  ]
-  if dist > 15 [
-    set taxiM 10 + 24 + 3 * (dist - 15)
-  ]
-
-  array:set benefitArr 2 mu * taxiS / (lambda * taxiTC + omega * taxiM)
-
-  ;; 计算顺风车效益
-  ifelse has-car? = false [ ;; 若无车，则计算顺风车乘客的效益
-    let rideSharePassengerS  1
-    let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
-
-    let rideSharePassengerM nobody
-    if dist > 0 and dist <= 12 [
-      set rideSharePassengerM 6.5 + dist * 1.3
-    ]
-    if dist > 12 and dist <= 40 [
-      set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
-    ]
-    if dist > 40 and dist <= 100 [
-      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
-    ]
-    if dist > 100 [
-      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+      array:set benefitArr 0 mu * carS / (lambda * carTC + omega * carM)
     ]
 
-    array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
+
+    ;; 计算公交车的效益
+    let busS  1 - (2.4 / 2.5) ^ 5
+    let busTC 6 / 60 + dist / 16 - dist / 20
+    let busM nobody
+    if dist > 0 and dist <= 10 [
+      set busM 2
+    ]
+    if dist > 10 and dist <= 15 [
+      set busM 3
+    ]
+    if dist > 15 and dist <= 20 [
+      set busM 4
+    ]
+    if dist > 20 and dist <= 25 [
+      set busM 5
+    ]
+    if dist > 25 and dist <= 30 [
+      set busM 6
+    ]
+    if dist > 30 and dist <= 35 [
+      set busM 7
+    ]
+    if dist > 35 and dist <= 40 [
+      set busM 8
+    ]
+    if dist > 40 [
+      set busM 9
+    ]
+
+    array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM)
+
+    ;; 计算出租车效益
+    let taxiS  1
+    let taxiTC (3 / 60 + dist / 60 - dist / 26.31) * 1.3
+
+    let taxiM nobody
+    if dist > 0 and dist <= 3 [
+      set taxiM 10
+    ]
+    if dist > 3 and dist <= 15 [
+      set taxiM 10 + 2 * (dist - 3)
+    ]
+    if dist > 15 [
+      set taxiM 10 + 24 + 3 * (dist - 15)
+    ]
+
+    array:set benefitArr 2 mu * taxiS / (lambda * taxiTC + omega * taxiM)
+
+    ;; 计算顺风车效益
+    ifelse has-car? = false [ ;; 若无车，则计算顺风车乘客的效益
+      let rideSharePassengerS  1
+      let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+
+      let rideSharePassengerM nobody
+      if dist > 0 and dist <= 12 [
+        set rideSharePassengerM 6.5 + dist * 1.3
+      ]
+      if dist > 12 and dist <= 40 [
+        set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
+      ]
+      if dist > 40 and dist <= 100 [
+        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
+      ]
+      if dist > 100 [
+        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+      ]
+
+      array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
+    ][
+      ;; 若有车，计算乘客效益和司机效益
+      ;; 计算顺风车乘客效益
+      let rideSharePassengerS  1
+      let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+
+      let rideSharePassengerM nobody
+      if dist > 0 and dist <= 12 [
+        set rideSharePassengerM 6.5 + dist * 1.3
+      ]
+      if dist > 12 and dist <= 40 [
+        set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
+      ]
+      if dist > 40 and dist <= 100 [
+        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
+      ]
+      if dist > 100 [
+        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+      ]
+
+      array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
+
+      ;; 计算顺风车司机效益
+      let rideShareDriverS 1
+      let rideShareDriverTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+      ;; 司机至少期望能接到一个乘客拼车，故其期望费用减去一个乘客的费用
+      let rideShareDriverM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime - rideSharePassengerM + 0.1 * rideSharePassengerM
+
+      array:set benefitArr 6 mu * rideShareDriverS / (lambda * rideShareDriverTC + omega * rideShareDriverM)
+    ]
+
+    ;; 计算地铁效益
+    let subwayS  1 - (1 / 1.2) ^ 5
+    let subwayTC 0.1
+    let subwayM nobody
+    if dist > 0 and dist <= 6 [
+      set subwayM 3
+    ]
+    if dist > 6 and dist <= 12 [
+      set subwayM 4
+    ]
+    if dist > 12 and dist <= 22 [
+      set subwayM 5
+    ]
+    if dist > 22 and dist <= 32 [
+      set subwayM 6
+    ]
+    if dist > 32 and dist <= 52 [
+      set subwayM 7
+    ]
+    if dist > 52 and dist <= 72 [
+      set subwayM 8
+    ]
+    if dist > 72 and dist <= 92 [
+      set subwayM 9
+    ]
+    if dist > 92 [
+      set subwayM 9 + round (dist - 92) / 20 ;; 每超过20公里增加1元
+    ]
+
+    array:set benefitArr 4 mu * subwayS / (lambda * subwayTC + omega * subwayM)
+
+    ;; 计算短途自行车效益
+    ;; 默认每个居民都有自行车
+
+    let bikeS  nobody
+
+    ;; 自行车的实际出行时间、自行车TC计算
+    let tReal nobody
+    let bikeTC nobody
+    ifelse dist <= 4 [
+      set tReal dist / 16
+      set bikeTC 0
+    ][
+      set tReal 4 / 16 + ( dist - 4 ) / 12
+      set bikeTC (4 / 16 + 1 / 12 * ( dist - 4 ) - dist / 16) * 0.5
+    ]
+
+    set bikeS 1 - ( tReal / 0.5 ) ^ 2
+
+    let bikeM 0
+
+    ;; 解决零除问题
+    ifelse lambda * bikeTC + omega * bikeM = 0 [
+      array:set benefitArr 5 100000000
+    ][
+      array:set benefitArr 5 mu * bikeS / (lambda * bikeTC + omega * bikeM)
+    ]
   ][
-    ;; 若有车，计算乘客效益和司机效益
-    let rideSharePassengerS  1
-    let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
-
-    let rideSharePassengerM nobody
-    if dist > 0 and dist <= 12 [
-      set rideSharePassengerM 6.5 + dist * 1.3
-    ]
-    if dist > 12 and dist <= 40 [
-      set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
-    ]
-    if dist > 40 and dist <= 100 [
-      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
-    ]
-    if dist > 100 [
-      set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
-    ]
-
-    let rideShareDriverS 1
-    let rideShareDriverTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
-    ;; 司机至少期望能接到一个乘客拼车，故其期望费用减去一个乘客的费用
-    let rideShareDriverM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime - rideSharePassengerM + 0.1 * rideSharePassengerM
-
-    array:set benefitArr 6 mu * rideShareDriverS / (lambda * rideShareDriverTC + omega * rideShareDriverM)
+    ;; 若出现了递归
+    set benefitArr lastArr
   ]
 
-  ;; 计算地铁效益
-  let subwayS  1 - (1 / 1.2) ^ 5
-  let subwayTC 0.1
-  let subwayM nobody
-  if dist > 0 and dist <= 6 [
-    set subwayM 3
+  ;; 若有不考虑的项，则设置索引对应的元素为很大的负数
+  if setZeroMethod > 0 [
+    array:set benefitArr (setZeroMethod - 1) -1000000000000000
   ]
-  if dist > 6 and dist <= 12 [
-    set subwayM 4
-  ]
-  if dist > 12 and dist <= 22 [
-    set subwayM 5
-  ]
-  if dist > 22 and dist <= 32 [
-    set subwayM 6
-  ]
-  if dist > 32 and dist <= 52 [
-    set subwayM 7
-  ]
-  if dist > 52 and dist <= 72 [
-    set subwayM 8
-  ]
-  if dist > 72 and dist <= 92 [
-    set subwayM 9
-  ]
-  if dist > 92 [
-    set subwayM 9 + round (dist - 92) / 20 ;; 每超过20公里增加1元
-  ]
-
-  array:set benefitArr 4 mu * subwayS / (lambda * subwayTC + omega * subwayM)
-
-  ;; 计算短途自行车效益
-  ;; 默认每个居民都有自行车
-
-  let bikeS  nobody
-
-  ;; 自行车的实际出行时间、自行车TC计算
-  let tReal nobody
-  let bikeTC nobody
-  ifelse dist <= 4 [
-    set tReal dist / 16
-    set bikeTC 0
-  ][
-    set tReal 4 / 16 + ( dist - 4 ) / 12
-    set bikeTC (4 / 16 + 1 / 12 * ( dist - 4 ) - dist / 16) * 0.5
-  ]
-
-  set bikeS 1 - ( tReal / 0.5 ) ^ 2
-
-  let bikeM 0
-
-  ;; 解决零除问题
-  ifelse lambda * bikeTC + omega * bikeM = 0 [
-    array:set benefitArr 5 10000
-  ][
-    array:set benefitArr 5 mu * bikeS / (lambda * bikeTC + omega * bikeM)
-  ]
+  ;; debug
+  ;; show benefitArr
 
 
   ;; 找出数组中最大元素，即最大效益
@@ -1081,15 +1136,44 @@ to-report getTravelMethod [dist myWorkTime]
   let tempMax 0
   let tempMaxIndex 0
 
+
+
+  ;; 找到最大的项对应索引
   while [i < 7][
-    if array:item benefitArr i > tempMax [
+    if ((array:item benefitArr i) > tempMax )[
       set tempMax array:item benefitArr i
       set tempMaxIndex i
     ]
     set i i + 1
   ]
+  ;; 循环结束后最大效益对应的索引存储在tempMaxIndex中
 
-  report (tempMaxIndex + 1)
+  let myTravelMethod -1
+
+  ;; 若想要以出租车（乘客）方式出行
+  if (tempMaxIndex = 2) [
+    let target-taxi find-taxi ;; 找出租车，赋给target-taxi
+    if target-taxi = nobody [
+      ;; 若未找到，则不考虑出租车（乘客）方式，重新进行路径选择
+      set myTravelMethod getTravelMethod dist myWorkTime 3 benefitArr
+      report myTravelMethod
+      show "debug! doesn't return"
+    ]
+  ]
+
+  ;; 若想要以顺风车（乘客）方式出行
+  if (tempMaxIndex = 3) [
+    let targetDriver findRideDriver ;; 找顺风车
+    if targetDriver = nobody [
+      ;; 若未找到，则不考虑顺风车（乘客）方式，重新进行路径选择
+      set myTravelMethod getTravelMethod dist myWorkTime 4 benefitArr
+      report myTravelMethod
+    ]
+  ]
+
+  ;; 其他方式，返回其出行方式
+  set myTravelMethod (tempMaxIndex + 1)
+  report myTravelMethod
 
 end
 
@@ -1110,7 +1194,7 @@ to set-trip-mode
 
       let dist length find-path departure destination 1
       ;; 进行出行方式选择
-      set travelMethod getTravelMethod dist workTime
+      set travelMethod getTravelMethod dist workTime 0 nobody
       ;;show travelMethod 调试
     ]
 
@@ -1161,6 +1245,8 @@ to set-trip-mode
 
           set lastTripMode 3
         ][;; 若没找到出租车
+          show "exception!! not found taxi"
+
           set trip-mode 2 ;; 设置出行方式为乘公交车
           set-max-speed person-speed
 
@@ -1279,6 +1365,8 @@ to set-trip-mode
 
           set lastTripMode 6
         ][;; 若没找到顺风车
+          show "exception!! not found ride sharing driver"
+
           set trip-mode 2 ;; 设置出行方式为乘公交车
                           ;;show ("not found Driver")
           set-max-speed person-speed
@@ -1286,8 +1374,27 @@ to set-trip-mode
           set lastTripMode 2
         ]
       ]
+
+
+
+      ;; 若乘客选择地铁出行
+      if travelMethod = 5 [
+        set trip-mode 8
+        set-max-speed subwaySpeed
+
+        set lastTripMode 8
+      ]
+
+      ;; 若乘客选择短途自行车出行
+      if travelMethod = 6 [
+        set trip-mode 9
+        set-max-speed bikeSpeed
+
+        set lastTripMode 9
+      ]
+
       ;; todo 待完善，完成各个主体开发后（地铁和短途自行车）
-      if travelMethod = 2 or travelMethod = 5 or travelMethod = 6 [
+      if travelMethod = 2 [
         set trip-mode 2 ;; 设置出行方式为乘公交车
         set-max-speed person-speed
 
@@ -1462,8 +1569,25 @@ to set-trip-mode
           set lastTripMode 2
         ]
       ]
+
+      ;; 若乘客选择地铁出行
+      if travelMethod = 5 [
+        set trip-mode 8
+        set-max-speed subwaySpeed
+
+        set lastTripMode 8
+      ]
+
+      ;; 若乘客选择短途自行车出行
+      if travelMethod = 6 [
+        set trip-mode 9
+        set-max-speed bikeSpeed
+
+        set lastTripMode 9
+      ]
+
       ;; todo 待完善，完成各个主体开发后（地铁和短途自行车）
-      if travelMethod = 2 or travelMethod = 5 or travelMethod = 6 [
+      if travelMethod = 2  [
         set trip-mode 2 ;; 设置出行方式为乘公交车
         set-max-speed person-speed
 
@@ -1646,6 +1770,22 @@ to watch-traffic-light
   ]
 end
 
+to transferSubway
+  if ([intersection?] of patch-here = true)[ ;; 若该处为交叉口
+    ifelse subwayTransferCountdown > 0 [
+      set still? true
+      set subwayTransferCountdown subwayTransferCountdown - 1
+    ][
+      set still? false
+      set subwayTransferCountdown 5
+    ]
+
+
+  ]
+end
+
+
+
 ;; stay:由citizens bus taxi调用,当still?=true时
 ;; todo: 顺风车绑定逻辑
 to stay
@@ -1661,8 +1801,8 @@ to stay
       set still? false
     ]
 
-    ;; 当trip-mode不为3出租车（乘客）和6顺风车（乘客）时，保持原程序逻辑
-    if (trip-mode = 1 or trip-mode = 2 or trip-mode = 4 or trip-mode = 5) [
+    ;; 当trip-mode不为3出租车（乘客）、6顺风车（乘客）和7 顺风车（司机）时，保持原程序逻辑
+    if (trip-mode = 1 or trip-mode = 2 or trip-mode = 4 or trip-mode = 5 or trip-mode = 8 or trip-mode = 9) [
       ;; set path
       set-trip-mode
       set-path
@@ -2116,6 +2256,9 @@ to move
   ]
 end
 
+
+
+
 ;;  uniform controller
 to progress
   ;; 居民
@@ -2123,8 +2266,15 @@ to progress
   ask citizens with[trip-mode != 7] [
     set commuting-counter commuting-counter + 1 ;; 所有citizens自身的通勤计次加1
 
+    ;; 若为地铁
+    if trip-mode = 8 [
+      ;; 在交叉口模拟换乘
+      transferSubWay
+    ]
+
     if (count bus-link-neighbors = 0)[ ;; 当旁边没有公车时
-      ;; watch-traffic-light ;; 判断是否在信号灯下并执行相应动作（会设置still）
+
+      ;; watch-traffic-light
       ifelse still? [ ;; 若still为true
         stay
       ][ ;; 若不为true则移动
@@ -2187,10 +2337,10 @@ end
 ;;  command
 to go
   progress
-  mouse-manager
+  ;;mouse-manager
   ;;change-traffic-light
-  record-data
-  update-plot
+  ;;record-data
+  ;;update-plot
   tick
 end
 
@@ -2597,17 +2747,6 @@ NIL
 NIL
 1
 
-MONITOR
-51
-481
-108
-526
-NIL
-money
-17
-1
-11
-
 SLIDER
 3
 10
@@ -2640,24 +2779,6 @@ NIL
 NIL
 1
 
-PLOT
-726
-63
-1015
-218
-Average Taxi Carring Rate
-Time
-Rate
-0.0
-10.0
-0.0
-100.0
-true
-false
-"" ""
-PENS
-"taxi" 1.0 0 -16777216 true "\n" "\n\n"
-
 MONITOR
 725
 10
@@ -2670,33 +2791,15 @@ count taxies
 11
 
 MONITOR
-850
-10
-966
-55
+726
+80
+842
+125
 Number of buses
 count buses
 17
 1
 11
-
-PLOT
-726
-228
-1015
-388
-Average Bus Carring Number
-Time
-Number
-0.0
-10.0
-0.0
-10.0
-true
-false
-"set-plot-y-range 0 bus-capacity\n  set-plot-x-range 0 10" ""
-PENS
-"bus" 1.0 0 -16777216 true "\n\n" "\n"
 
 BUTTON
 30
@@ -2714,24 +2817,6 @@ NIL
 NIL
 NIL
 1
-
-PLOT
-725
-397
-1015
-557
-Average Commuting Time
-Time
-Time
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"citizen" 1.0 0 -16777216 true "" ""
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -2823,6 +2908,31 @@ arrow
 true
 0
 Polygon -7500403 true true 150 0 0 150 105 150 105 293 195 293 195 150 300 150
+
+bike
+false
+0
+Circle -7500403 false true -4 161 127
+Circle -7500403 false true 176 161 127
+Line -7500403 true 240 225 180 105
+Line -7500403 true 240 225 165 225
+Line -7500403 true 165 225 75 105
+Line -7500403 true 75 105 180 105
+Line -7500403 true 60 225 90 15
+Line -7500403 true 60 15 120 15
+Line -7500403 true 165 225 180 45
+Line -7500403 true 165 45 195 45
+Rectangle -7500403 true true 45 0 135 30
+Rectangle -7500403 true true 150 30 210 60
+Polygon -7500403 true true 75 30 45 240 75 240 105 30
+Polygon -7500403 true true 90 105 165 210 150 225 60 105
+Polygon -7500403 true true 150 225 240 225 231 206 142 205
+Polygon -7500403 true true 216 226 164 117 180 105 240 225
+Polygon -7500403 true true 75 120 180 120 180 105 75 105
+Polygon -7500403 true true 150 225 165 60 195 60 180 225
+Circle -7500403 false true -4 161 127
+Circle -7500403 true true -4 161 127
+Circle -7500403 true true 176 161 127
 
 box
 false
@@ -3092,6 +3202,28 @@ Circle -16777216 true false 30 30 240
 Circle -7500403 true true 60 60 180
 Circle -16777216 true false 90 90 120
 Circle -7500403 true true 120 120 60
+
+train passenger car
+false
+0
+Polygon -7500403 true true 15 206 15 150 15 135 30 120 270 120 285 135 285 150 285 206 270 210 30 210
+Circle -16777216 true false 240 195 30
+Circle -16777216 true false 210 195 30
+Circle -16777216 true false 60 195 30
+Circle -16777216 true false 30 195 30
+Rectangle -16777216 true false 30 140 268 165
+Line -7500403 true 60 135 60 165
+Line -7500403 true 60 135 60 165
+Line -7500403 true 90 135 90 165
+Line -7500403 true 120 135 120 165
+Line -7500403 true 150 135 150 165
+Line -7500403 true 180 135 180 165
+Line -7500403 true 210 135 210 165
+Line -7500403 true 240 135 240 165
+Rectangle -16777216 true false 5 195 19 207
+Rectangle -16777216 true false 281 195 295 207
+Rectangle -13345367 true false 15 165 285 173
+Rectangle -2674135 true false 15 180 285 188
 
 tree
 false
