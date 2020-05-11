@@ -106,6 +106,8 @@ citizens-own[
   lastStayAt ;; 记录上次呆过的地方, 0 表示家，1表示公司
   lastTripMode ;; 记录上次的出行方式
 
+  agentDestination ;; 顺风车司机的目的地，用于合成匹配算法
+
   ;; 顺风车司机特有，两个乘客在一个地点同时合乘情况下的互斥信号量 0：资源被占用 1：资源可用数量为1
   mutex
 
@@ -427,6 +429,10 @@ to setup-citizen
   set last-commuting-time nobody ;; 控制event-duration
   set commuting-counter   0 ;; 通勤计次，每一个ticks加1
 
+
+  ;; 各个主体初始化目的地
+  set agentDestination company
+
   ;;  set trip-mode 居民出行行为选择
   set-trip-mode
 
@@ -436,7 +442,6 @@ to setup-citizen
   ]
 
   ;; 顺风车（司机）和顺风车（乘客）初始化上次呆过的地方为家
-
   set lastStayAt 0
 
   ;; 初始化上次的出行方式
@@ -522,10 +527,17 @@ end
 
 ;;返回一个顺风车司机主体，若没找到就返回null, 由citizen调用
 to-report findRideDriver
+  ;; 保存当前乘客
   let this self
-  ;; 合乘匹配
+  ;; 合乘匹配，调用者为当前乘客
+  ;; 条件：顺风车司机的出发地与目的地与当前乘客的出发地和目的地距离不超过10km
   ;; todo: 按照设计算法实现
-  let availableDrivers ((citizens with [trip-mode = 7 and time <= 0 and orderedNum < 2 and occupiedNum < 2 and not (orderedNum = 1 and occupiedNum = 1)]) in-radius 50) ;; time<=0:当顺风车司机在路上时
+  let availableDrivers ((citizens with [
+    trip-mode = 7 and time <= 0 and orderedNum < 2 and occupiedNum < 2      ;; time<=0:当顺风车司机将要出发或在路上时
+    and not (orderedNum = 1 and occupiedNum = 1)                            ;; 匹配有空闲位置的顺风车司机
+
+    and ( [distance ([patch-here] of ([agentDestination] of this)) ] of ([patch-here] of agentDestination) ) <= 10    ;; 司机的目的地与当前乘客的目的地小于10km
+  ]) in-radius 10)                                                          ;; 司机出发地与当前乘客所在地小于10km
   ifelse count availableDrivers > 0 [
     ;;show "find it"
     report min-one-of availableDrivers [distance this] ;; 返回距离最近的顺风车司机
@@ -809,13 +821,17 @@ to set-duration
     halt event-duration ;; 在公司，停止
 
     ;; 记录上次呆的地方
-      ifelse patch-here = [patch-here] of residence [
-        set lastStayAt 0
-      ][
-        if patch-here = [patch-here] of company [
-          set lastStayAt 1
-        ]
+    ifelse patch-here = [patch-here] of residence [
+      set lastStayAt 0
+      ;; 合乘相关
+      set agentDestination company
+    ][
+      if patch-here = [patch-here] of company [
+        set lastStayAt 1
+        ;; 合乘相关
+        set agentDestination residence
       ]
+    ]
 
 
   ][
@@ -1507,9 +1523,14 @@ to set-path
           ;; 若上次呆的地方为家
           ifelse lastStayAt = 0 [
             set terminal-point company ;; 将目的地设置为公司
+            ;; 用于乘客匹配算法
+            set agentDestination company
           ][
             ;; 若上次呆的地方为公司
             set terminal-point residence ;; 将目的地设置为家
+            ;; 用于乘客匹配算法
+            set agentDestination residence
+
             ;; debug
             show "Driver: leaving my company"
           ]
@@ -1522,9 +1543,13 @@ to set-path
         ;; 若该目的地为家
         ifelse terminal-point = residence [
           set terminal-point company
+          ;; 用于乘客匹配算法
+          set agentDestination company
         ][
           ;; 若该目的地为公司
           set terminal-point residence
+          ;; 用于乘客匹配算法
+          set agentDestination residence
         ]
       ][ ;; 若未到目的地
         ;; debug
