@@ -106,6 +106,9 @@ citizens-own[
   lastStayAt ;; 记录上次呆过的地方, 0 表示家，1表示公司
   lastTripMode ;; 记录上次的出行方式
 
+  ;; 顺风车司机特有，两个乘客在一个地点同时合乘情况下的互斥信号量 0：资源被占用 1：资源可用数量为1
+  mutex
+
 ]
 
 ;; 出租车
@@ -438,6 +441,9 @@ to setup-citizen
 
   ;; 初始化上次的出行方式
   set lastTripMode 0
+
+  ;; 设置顺风车司机的两个乘客在一个地点同时合乘情况下的互斥信号量
+  set mutex 1
 
   ;;  set path
   set path find-path residence company trip-mode ;; find-path是一个函数，输入三个参数：起点，终点，出行方式, 返回一个list是结点组成的路径
@@ -1505,7 +1511,7 @@ to set-path
             ;; 若上次呆的地方为公司
             set terminal-point residence ;; 将目的地设置为家
             ;; debug
-            show "Driver leaving my company"
+            show "Driver: leaving my company"
           ]
 
         ]
@@ -1718,7 +1724,10 @@ to stay
                     set heading      [heading] of this
 
                     ;; 消除该名乘客路径
-                    set pathList but-first pathList
+                    if pathList != [] [ ;; pathList为空的情况是乘客已经在司机的所在地了
+                      set pathList but-first pathList
+                    ]
+
                   ]
 
                   ;; 对于该乘客
@@ -1763,17 +1772,8 @@ to stay
                       set heading      [heading] of this
 
                       ;; 打补丁
-                      ifelse (pathList != [])[
+                      if (pathList != [])[
                         set pathList but-first pathList ;; 消除该乘客路径
-                      ][
-                        ask one-of rideSharingLink-neighbors [
-                          set-path          ;; 第一个乘客重新设定路径
-                          face first path
-                          set time time - 1 ;; time变成0
-                                            ;; 取消静止（以便乘客移动）
-
-                          set still? false
-                        ]
                       ]
 
                     ]
@@ -1859,6 +1859,10 @@ to stay
                                                       ;; 改变顺风车头
                       set heading      [heading] of this
 
+                      if (pathList != []) [
+                        set pathList but-first pathList ;; 消除该第一个乘客路径
+
+                      ]
 
 
                     ][
@@ -1877,14 +1881,14 @@ to stay
                                                       ;; 改变顺风车头
                       set heading      [heading] of this
 
-                      set pathList but-first pathList ;; 消除该第一个乘客路径
+                      if (pathList != []) [
+                        set pathList but-first pathList ;; 消除该第一个乘客路径
+
+                      ]
 
                       ;;　顺风车设置路径为第二个乘客所在地
                       set-path
                     ]
-
-
-
 
                   ]
 
@@ -1895,14 +1899,47 @@ to stay
                     ]
                     ;; ask my-rideSharingLinks [tie] ;; 两个乘客都与司机绑定
                     show "[orderedNum] of linkDriver = 2, tie 2 passengers at once!"
+
+                    ;; 司机静止
+                    ask linkDriver [
+                      halt 0
+                    ]
+
+                    ;; 第一个乘客移动，第二个乘客静止
+
+                    ;; 若资源没有被占用
+                    ifelse mutex = 1 [
+                      ;; 第一个乘客移动
+                      set-path
+                      face first path
+                      fd 1
+                      set-path
+                      set time time - 1
+                      set still? false
+
+                      ;; 第二个乘客静止
+                      ask other orderedPassengers [
+                        halt 0
+                      ]
+
+                    ][ ;; 若资源被占用
+                      set mutex 0
+                    ]
+
+
                   ][
                     ;; 若两个乘客不在一个地点
                     ;; 无向链绑定（链的end1和end2端点捆绑在一起）根海龟移动时，叶海龟也沿相同的方向移动相同的距离，无向链互为根海龟、叶海龟
                     ask one-of my-rideSharingLinks [tie]
                     show "[orderedNum] of linkDriver = 2, tie 1 passenger!"
+
+                    ;; 让绑定的顺风车离开当前乘客所在地，以规避nextTick的条件判定
+                    ask linkDriver [
+                      face first path
+                      fd 1
+                      set still? false
+                    ]
                   ]
-
-
 
                   ;; debug
                   show "[orderedNum] of linkDriver = 2 , tie"
@@ -1911,17 +1948,11 @@ to stay
                   if (patch-here = [patch-here] of company)[
                     set money money + earning-power
                   ]
+
                   face first path
 
-                  ;; 让绑定的顺风车离开当前乘客所在地，以规避nextTick的条件判定
-                  ask linkDriver [
-                    face first path
-                    fd 1
-                    set still? false
-                  ]
-
-                ]
-              ] ;;orderedNum = 1 的 else if
+                ] ;; if [orderedNum] of linkDriver = 2
+              ] ;;orderedNum = 1 的 else if: if [orderedNum] of linkDriver = 2
 
 
 
@@ -2062,20 +2093,6 @@ end
 
 ;;  uniform controller
 to progress
-
-  ;; 顺风车（司机）
-  ask citizens with[trip-mode = 7] [
-    ;;set commuting-counter commuting-counter + 1 ;; 所有citizens自身的通勤计次加1
-
-    ;;
-    ;;watch-traffic-light
-    ifelse still? [
-      stay
-    ][
-      move
-    ]
-  ]
-
   ;; 居民
   ;; 除了顺风车司机以外的居民
   ask citizens with[trip-mode != 7] [
@@ -2090,6 +2107,20 @@ to progress
       ]
     ]
   ]
+
+  ;; 顺风车（司机）
+  ask citizens with[trip-mode = 7] [
+    ;;set commuting-counter commuting-counter + 1 ;; 所有citizens自身的通勤计次加1
+
+    ;;
+    ;;watch-traffic-light
+    ifelse still? [
+      stay
+    ][
+      move
+    ]
+  ]
+
   ;; 出租车
   ask taxies [
     ;; 如果没被占用，就移动；若被占用，就居民带着他移动
