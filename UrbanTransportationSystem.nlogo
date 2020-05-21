@@ -56,6 +56,9 @@ globals[
   company-district ;; 公司区域
   residences
   companies
+
+  lands ;; 中间的公共用地
+
   ;;  patch
   global-origin-station ;; 源点O
   global-terminal-station ;; 终端点D
@@ -63,6 +66,59 @@ globals[
   average-taxi-carring-rate-list
   average-commuting-time-list
   average-bus-carring-number-list
+
+  ;; 街区
+  block1
+  block2
+  block3
+  block4
+  block5
+  block6
+  block7
+  block8
+  block9
+  block10
+  block11
+  block12
+  block13
+  block14
+  block15
+  block16
+  block17
+  block18
+  block19
+  block20
+  block21
+  block22
+  block23
+  block24
+  block25
+  block26
+  block27
+  block28
+  block29
+  block30
+  block31
+  block32
+  block33
+  block34
+  block35
+  block36
+
+
+  ;; 九宫格区域
+  district1
+  district2
+  district3
+  district4
+  district5
+  district6
+  district7
+  district8
+  district9
+
+  ;;每个街区的出口
+  exits
 ]
 
 citizens-own[
@@ -208,7 +264,7 @@ to setup-globals
 
   set acceleration         0.25
   set deceleration         0.5
-  set event-duration       720
+  set event-duration       960 ;; 设置居民休息时间为960
   set bus-duration         2 ;;
   set taxi-duration        2 ;;
   set buffer-distance      1.0 ;; 缓冲距离为一个砖块
@@ -242,44 +298,156 @@ to setup-patches
     let up-patch    patch-at  0  1
     let down-patch  patch-at  0 -1
     ;; 若存在则设置颜色
-    if right-patch != nobody [ ask right-patch [set pcolor 69] ]
-    if left-patch  != nobody [ ask left-patch  [set pcolor 69] ]
-    if up-patch    != nobody [ ask up-patch    [set pcolor 19  ] ]
-    if down-patch  != nobody [ ask down-patch  [set pcolor 19  ] ]
+    ;;if right-patch != nobody [ ask right-patch [set pcolor 69] ]
+    ;;if left-patch  != nobody [ ask left-patch  [set pcolor 69] ]
+    ;;if up-patch    != nobody [ ask up-patch    [set pcolor 19  ] ]
+    ;;if down-patch  != nobody [ ask down-patch  [set pcolor 19  ] ]
   ]
   ;;  land
   ask patches with [land-type != "road"][
     set land-type "land"
     set pcolor green ;; 公共用地用绿色
   ]
+
+
+
   ;;  idle estate
   ask patches with [
     any? neighbors with [land-type = "road"] and land-type = "land"
   ][
     set land-type "idle-estate"
-    set pcolor grey ;; 未开发用地用灰色
+    set pcolor grey ;; 未开发用地用灰色 现在改为绿色
   ]
   set idle-estates patch-set patches with [land-type = "idle-estate"] ;; patch-set 返回包含所有输入瓦片的主体集合
+
+  set lands patches with [land-type != "road" and land-type != "idle-estate"] ;; 设置公用用地
+
+  ;; 赋值街区
+  set block1 patch-set patches with [(pxcor > -24 and pxcor < -16 ) and (pycor > 16 and pycor < 24)]
+  set block2 patch-set patches with [(pxcor > -16 and pxcor < -8 ) and (pycor > 16 and pycor < 24)]
+  set block3 patch-set patches with [(pxcor > -8 and pxcor < 0 ) and (pycor > 16 and pycor < 24)]
+  set block4 patch-set patches with [(pxcor > 0 and pxcor < 8 ) and (pycor > 16 and pycor < 24)]
+  set block5 patch-set patches with [(pxcor > 8 and pxcor < 16 ) and (pycor > 16 and pycor < 24)]
+  set block6 patch-set patches with [(pxcor > 16 and pxcor < 24 ) and (pycor > 16 and pycor < 24)]
+
+  set block7 patch-set patches with [(pxcor > -24 and pxcor < -16 ) and (pycor > 8 and pycor < 16)]
+  set block8 patch-set patches with [(pxcor > -16 and pxcor < -8 ) and (pycor > 8 and pycor < 16)]
+  set block9 patch-set patches with [(pxcor > -8 and pxcor < 0 ) and (pycor > 8 and pycor < 16)]
+  set block10 patch-set patches with [(pxcor > 0 and pxcor < 8 ) and (pycor > 8 and pycor < 16)]
+  set block11 patch-set patches with [(pxcor > 8 and pxcor < 16 ) and (pycor > 8 and pycor < 16)]
+  set block12 patch-set patches with [(pxcor > 16 and pxcor < 24 ) and (pycor > 8 and pycor < 16)]
+
+  set block13 patch-set patches with [(pxcor > -24 and pxcor < -16 ) and (pycor > 0 and pycor < 8)]
+  set block14 patch-set patches with [(pxcor > -16 and pxcor < -8 ) and (pycor > 0 and pycor < 8)]
+  set block15 patch-set patches with [(pxcor > -8 and pxcor < 0 ) and (pycor > 0 and pycor < 8)]
+  set block16 patch-set patches with [(pxcor > 0 and pxcor < 8 ) and (pycor > 0 and pycor < 8)]
+  set block17 patch-set patches with [(pxcor > 8 and pxcor < 16 ) and (pycor > 0 and pycor < 8)]
+  set block18 patch-set patches with [(pxcor > 16 and pxcor < 24 ) and (pycor > 0 and pycor < 8)]
+
+  set block19 patch-set patches with [(pxcor > -24 and pxcor < -16 ) and (pycor > -8 and pycor < 0)]
+  set block20 patch-set patches with [(pxcor > -16 and pxcor < -8 ) and (pycor > -8 and pycor < 0)]
+  set block21 patch-set patches with [(pxcor > -8 and pxcor < 0 ) and (pycor > -8 and pycor < 0)]
+  set block22 patch-set patches with [(pxcor > 0 and pxcor < 8 ) and (pycor > -8 and pycor < 0)]
+  set block23 patch-set patches with [(pxcor > 8 and pxcor < 16 ) and (pycor > -8 and pycor < 0)]
+  set block24 patch-set patches with [(pxcor > 16 and pxcor < 24 ) and (pycor > -8 and pycor < 0)]
+
+  set block25 patch-set patches with [(pxcor > -24 and pxcor < -16 ) and (pycor > -16 and pycor < -8)]
+  set block26 patch-set patches with [(pxcor > -16 and pxcor < -8 ) and (pycor > -16 and pycor < -8)]
+  set block27 patch-set patches with [(pxcor > -8 and pxcor < 0 ) and (pycor > -16 and pycor < -8)]
+  set block28 patch-set patches with [(pxcor > 0 and pxcor < 8 ) and (pycor > -16 and pycor < -8)]
+  set block29 patch-set patches with [(pxcor > 8 and pxcor < 16 ) and (pycor > -16 and pycor < -8)]
+  set block30 patch-set patches with [(pxcor > 16 and pxcor < 24 ) and (pycor > -16 and pycor < -8)]
+
+  set block31 patch-set patches with [(pxcor > -24 and pxcor < -16 ) and (pycor > -24 and pycor < -16)]
+  set block32 patch-set patches with [(pxcor > -16 and pxcor < -8 ) and (pycor > -24 and pycor < -16)]
+  set block33 patch-set patches with [(pxcor > -8 and pxcor < 0 ) and (pycor > -24 and pycor < -16)]
+  set block34 patch-set patches with [(pxcor > 0 and pxcor < 8 ) and (pycor > -24 and pycor < -16)]
+  set block35 patch-set patches with [(pxcor > 8 and pxcor < 16 ) and (pycor > -24 and pycor < -16)]
+  set block36 patch-set patches with [(pxcor > 16 and pxcor < 24 ) and (pycor > -24 and pycor < -16)]
+
+
+  ;; 赋值九宫格区域
+  set district1 (patch-set block1 block2 block7 block8)
+  set district2 (patch-set block3 block4 block9 block10)
+  set district3 (patch-set block5 block6 block11 block12)
+
+  set district4 (patch-set block13 block14 block19 block20)
+  set district5 (patch-set block25 block16 block21 block22)
+  set district6 (patch-set block27 block18 block23 block24)
+
+  set district7 (patch-set block25 block26 block31 block32)
+  set district8 (patch-set block27 block28 block33 block34)
+  set district9 (patch-set block29 block30 block35 block36)
+
+
+  ;; 赋值出口(不能出现在四个角上，否则生成不了边)
+  let exit1 one-of block1 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit2 one-of block2 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit3 one-of block3 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit4 one-of block4 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit5 one-of block5 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit6 one-of block6 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+
+  let exit7 one-of block7 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit8 one-of block8 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit9 one-of block9 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit10 one-of block10 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit11 one-of block11 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit12 one-of block12 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+
+  let exit13 one-of block13 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit14 one-of block14 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit15 one-of block15 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit16 one-of block16 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit17 one-of block17 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit18 one-of block18 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+
+  let exit19 one-of block19 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit20 one-of block20 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit21 one-of block21 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit22 one-of block22 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit23 one-of block23 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit24 one-of block24 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+
+  let exit25 one-of block25 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit26 one-of block26 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit27 one-of block27 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit28 one-of block28 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit29 one-of block29 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit30 one-of block30 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+
+  let exit31 one-of block31 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit32 one-of block32 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit33 one-of block33 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit34 one-of block34 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit35 one-of block35 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+  let exit36 one-of block36 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
+
+  set exits (patch-set exit1 exit2 exit3 exit4 exit5 exit6 exit7 exit8 exit9 exit10 exit11 exit12 exit13 exit14 exit15 exit16 exit17 exit18 exit19 exit20 exit21 exit22 exit23 exit24 exit25 exit26 exit27 exit28 exit29 exit30 exit31 exit32 exit33 exit34 exit35 exit36)
+
   ;;  residence-district 居住区域（注意不是住所）set
   set residence-district patch-set patches with [
     ((pxcor > max-pxcor / 2) or (pxcor < (- max-pxcor / 2)) or        ;;
     (pycor > max-pycor / 2) or (pycor < (- max-pycor / 2))) and
-    (land-type = "idle-estate")
+    (land-type = "idle-estate" or land-type = "land")
   ]
   ;;  company-district
   set company-district patch-set patches with [
     ((pxcor < max-pxcor / 2) and (pxcor > (- max-pxcor / 2)) and
     (pycor < max-pycor / 2) and (pycor > (- max-pycor / 2))) and
-    ((land-type = "idle-estate"))
+    ((land-type = "idle-estate" or land-type = "land"))
   ]
+
+
 end
 
 to setup-estates
   ;; 向下取整，得到住所和公司的数目
   let residence-num ceiling(initial-people-num / residence-capacity)
   let company-num   ceiling(initial-people-num / company-capacity  )
+
   ;;  residences
-  ask n-of residence-num residence-district[
+  ask n-of residence-num residence-district [
     set land-type "residence" ;; 随机选择住所区域的patch变为住所
   ]
   set residences patch-set patches with [land-type = "residence"] ;; 设置patch-set
@@ -302,7 +470,7 @@ end
 ;; 由setup-map、setup-citizen、add-citizen调用，生成边
 to setup-graph
   let isTerminal? ([land-type] of patch-here = "residence" or [land-type] of patch-here = "company") ;;判断是否为终点 patch-here返回海龟下方的瓦片
-  create-edges-with vertices-on neighbors4 with [land-type = "road"][ ;; neighbors4返回由4个相邻瓦片组成的主体集合
+  create-edges-with vertices-on neighbors4 with [land-type = "road" or land-type = "land" or land-type = "residence" or land-type = "idle-estate"][ ;; neighbors4返回由4个相邻瓦片组成的主体集合
     set shape "dotted"
     set bus-route? false
     ifelse (isTerminal?)[
@@ -325,11 +493,24 @@ to setup-map
   ask companies [
     sprout-vertices 1 [hide-turtle]
   ]
+
+  ;; 公共用地也生成顶点
+  ask lands [
+    sprout-vertices 1 [hide-turtle]
+  ]
+
+  ;; 出口生成边
+  ask exits [
+    sprout-vertices 1 [hide-turtle]
+  ]
+
+
   ;;  initialize edges
   ask vertices [
     setup-graph ;; 生成边
   ]
 end
+
 ;;给setup-citizens调用，在住所生成居民，调用者为当前新生成的居民
 to setup-citizen
   ;;  set residence
@@ -337,7 +518,7 @@ to setup-citizen
   ;;  set company
   let my-company one-of companies with [num < company-capacity] ;; 随机选择一个公司容量不满的公司作为该居民的公司
   if (my-company = nobody)[ ;; 若公司容量都满了
-    let new-company one-of company-district with [land-type = "idle-estate"] ;; 在闲置地产找一块空地
+    let new-company one-of company-district with [land-type = "idle-estate" or land-type = "land"] ;; 在闲置地产和公用用地找一块空地
     ask new-company [
       set land-type "company"
       set pcolor blue
@@ -488,6 +669,8 @@ to setup-citizen
     create-map-link-with controller [tie] ;; 当前mapping-citizen与citizen连接（map-link是连接mapping-citizen和controller的无向链,tie为捆绑在一起，影响运动和方向
     show-turtle ;; 若没有这个语句，则视图上就没有turtle了
   ]
+
+  halt 2
 
   ;;  set shape
   ;;set-moving-shape
@@ -718,9 +901,29 @@ to passengers-on-off
 
               ;; 顺风车司机开始自由移动(若此时orderedNum>0,则继续接客；如果没有，就去司机自己的目的地)
 
-              set still?       false
-              set-path
-              face first path
+              ;; 若这个乘客的目的地不是该司机的目的地，则当前司机自由活动
+              ifelse patch-here != [patch-here] of agentDestination [
+                set still?       false
+                set-path
+                face first path
+              ][
+                ;; 若为当前司机目的地
+                ;; 若还有预定
+                ifelse orderedNum > 0 [
+                  set still?       false
+                  set-path
+                  face first path
+                ][
+                  ;; 若无人预定
+                  set still? true
+                  ;; 直接开始工作/休息
+                  set-duration
+                  ;; set default shape
+                  set-static-shape;; 变化形状为静止的形状
+                ]
+
+              ]
+
 
             ]
           ]
@@ -837,7 +1040,14 @@ to set-duration
     set   commuting-counter   0
 
     ;;  halt
-    halt event-duration ;; 在公司，停止
+    ifelse patch-here = [patch-here] of company [
+      halt ceiling(workTime * 60) ;; 在公司，停止该居民的工作时间
+    ][
+      if patch-here = [patch-here] of residence [
+        halt event-duration
+      ]
+    ]
+
 
     ;; 记录上次呆的地方
     ifelse patch-here = [patch-here] of residence [
@@ -865,7 +1075,7 @@ to set-duration
 
       ;; 顺风车（司机）
       if (trip-mode = 7)[
-        ifelse (patch-here != [patch-here] of residence and patch-here != [patch-here] of company) [
+        ifelse (patch-here != [patch-here] of agentDestination) [
           ;;show "not company!"
           halt taxi-duration ;; 到达乘客的目的地，等待taxi-duration再出发
         ][
@@ -2662,6 +2872,13 @@ to-report find-path [source target mode]
     show "debug!! In find-path function, target = nobody"
   ]
   let pred [predecessor] of target ;; 将终点的前驱赋给pred变量
+
+  ;;debug
+  if pred = nobody [
+    show "debug!! In find-path function, pred = nobody"
+  ]
+
+
   while [pred != source][ ;; 当前驱不是起点，循环
     set path-list fput pred path-list  ;; fput: Add item to the beginning of a list ;; 将当前结点前驱添加到path-list中
     set pred [predecessor] of pred ;; 设置pred变量为前驱的前驱
@@ -2763,10 +2980,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-43
-338
-117
-371
+45
+465
+119
+498
 Add taxi
 add-taxi
 NIL
@@ -2780,32 +2997,21 @@ NIL
 1
 
 MONITOR
-725
-10
-841
+6
 55
+122
+100
 Number of taxies
 count taxies
 17
 1
 11
 
-MONITOR
-726
-80
-842
-125
-Number of buses
-count buses
-17
-1
-11
-
 BUTTON
-30
-382
-131
-415
+31
+508
+132
+541
 Add citizen
 add-citizen
 NIL
@@ -2817,6 +3023,16 @@ NIL
 NIL
 NIL
 1
+
+CHOOSER
+730
+13
+869
+58
+cityShape
+cityShape
+"singleCenter" "fiveCenters" "nightCenters"
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
