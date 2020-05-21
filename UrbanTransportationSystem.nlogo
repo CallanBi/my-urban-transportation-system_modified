@@ -67,6 +67,9 @@ globals[
   average-commuting-time-list
   average-bus-carring-number-list
 
+  ;; 城市形态(由GUI定义)
+  ;cityShape
+
   ;; 街区
   block1
   block2
@@ -372,71 +375,67 @@ to setup-patches
   set district3 (patch-set block5 block6 block11 block12)
 
   set district4 (patch-set block13 block14 block19 block20)
-  set district5 (patch-set block25 block16 block21 block22)
-  set district6 (patch-set block27 block18 block23 block24)
+  set district5 (patch-set block15 block16 block21 block22)
+  set district6 (patch-set block17 block18 block23 block24)
 
   set district7 (patch-set block25 block26 block31 block32)
   set district8 (patch-set block27 block28 block33 block34)
   set district9 (patch-set block29 block30 block35 block36)
 
 
-  ;; 赋值出口(不能出现在四个角上，否则生成不了边)
-  let exit1 one-of block1 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit2 one-of block2 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit3 one-of block3 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit4 one-of block4 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit5 one-of block5 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit6 one-of block6 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
 
-  let exit7 one-of block7 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit8 one-of block8 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit9 one-of block9 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit10 one-of block10 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit11 one-of block11 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit12 one-of block12 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
 
-  let exit13 one-of block13 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit14 one-of block14 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit15 one-of block15 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit16 one-of block16 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit17 one-of block17 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit18 one-of block18 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-
-  let exit19 one-of block19 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit20 one-of block20 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit21 one-of block21 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit22 one-of block22 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit23 one-of block23 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit24 one-of block24 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-
-  let exit25 one-of block25 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit26 one-of block26 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit27 one-of block27 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit28 one-of block28 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit29 one-of block29 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit30 one-of block30 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-
-  let exit31 one-of block31 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit32 one-of block32 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit33 one-of block33 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit34 one-of block34 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit35 one-of block35 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-  let exit36 one-of block36 with[land-type = "idle-estate" and not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2 )]
-
-  set exits (patch-set exit1 exit2 exit3 exit4 exit5 exit6 exit7 exit8 exit9 exit10 exit11 exit12 exit13 exit14 exit15 exit16 exit17 exit18 exit19 exit20 exit21 exit22 exit23 exit24 exit25 exit26 exit27 exit28 exit29 exit30 exit31 exit32 exit33 exit34 exit35 exit36)
-
-  ;;  residence-district 居住区域（注意不是住所）set
-  set residence-district patch-set patches with [
-    ((pxcor > max-pxcor / 2) or (pxcor < (- max-pxcor / 2)) or        ;;
-    (pycor > max-pycor / 2) or (pycor < (- max-pycor / 2))) and
-    (land-type = "idle-estate" or land-type = "land")
+  ;; 若为单中心
+  ifelse cityShape = "singleCenter" [
+    ;;  residence-district 居住区域（注意不是住所）set
+    set residence-district patch-set patches with [
+      ((pxcor > max-pxcor / 2) or (pxcor < (- max-pxcor / 2)) or
+        (pycor > max-pycor / 2) or (pycor < (- max-pycor / 2))) and
+      (land-type = "idle-estate" or land-type = "land")
+    ]
+    ;;  company-district
+    set company-district patch-set patches with [
+      ((pxcor < max-pxcor / 2) and (pxcor > (- max-pxcor / 2)) and
+        (pycor < max-pycor / 2) and (pycor > (- max-pycor / 2))) and
+      ((land-type = "idle-estate" or land-type = "land"))
+    ]
+  ][
+    ;; 若为五中心
+    ifelse cityShape = "fiveCenters" [
+      ;; 居住区为2,4,6,8区
+      set residence-district patch-set patches with [
+        (member? self district2 or member? self district4 or
+        member? self district6 or member? self district8) and
+        (land-type = "idle-estate" or land-type = "land")
+      ]
+      ;; 商业区为1,3,5,7,9区
+      set company-district patch-set patches with [
+        (member? self district1 or member? self district3 or
+        member? self district5 or member? self district7 or
+        member? self district9) and
+        ((land-type = "idle-estate" or land-type = "land"))
+      ]
+    ][
+      ;; 若为九中心
+      if cityShape = "nineCenters" [
+        ;; 居住区为所有区域
+        set residence-district patch-set patches with [
+          (member? self district1 or member? self district2 or member? self district3 or
+          member? self district4 or member? self district5 or member? self district6 or
+          member? self district7 or member? self district8 or member? self district9) and
+          (land-type = "idle-estate" or land-type = "land")
+        ]
+        ;; 商业区为所有区域
+        set company-district patch-set patches with [
+          (member? self district1 or member? self district2 or member? self district3 or
+          member? self district4 or member? self district5 or member? self district6 or
+          member? self district7 or member? self district8 or member? self district9) and
+          (land-type = "idle-estate" or land-type = "land")
+        ]
+      ]
+    ]
   ]
-  ;;  company-district
-  set company-district patch-set patches with [
-    ((pxcor < max-pxcor / 2) and (pxcor > (- max-pxcor / 2)) and
-    (pycor < max-pycor / 2) and (pycor > (- max-pycor / 2))) and
-    ((land-type = "idle-estate" or land-type = "land"))
-  ]
+
 
 
 end
@@ -447,17 +446,58 @@ to setup-estates
   let company-num   ceiling(initial-people-num / company-capacity  )
 
   ;;  residences
-  ask n-of residence-num residence-district [
-    set land-type "residence" ;; 随机选择住所区域的patch变为住所
+
+  ;; 有85%的居住用地集中在居住中心
+  let i 0
+  while [i < residence-num ][
+    ifelse random 100 < 85 [
+      ask one-of residence-district with [land-type != "residence"] [
+        set land-type "residence" ;; 随机选择住所区域的patch变为住所
+      ]
+    ][
+      ask one-of company-district with [land-type != "residence"] [
+        set land-type "residence" ;; 随机选择住所区域的patch变为住所
+      ]
+
+    ]
+    set i i + 1
   ]
+
   set residences patch-set patches with [land-type = "residence"] ;; 设置patch-set
   ask residences [
     set pcolor yellow
     set num 0 ;; num是一个标记，0代表residence，1代表company
   ]
+
+  ;; 商业区和居住区不能设置在一处，需要互斥
+  let mutexCompanyDistrict patch-set company-district with [
+    not member? self residences
+  ]
+
   ;;  companies
   ;; 注意：companies的数据类型为patch-set,而不是vertices!
-  ask n-of company-num company-district[
+  ;; 有85%的商业用地集中在商业中心
+  let j 0
+  while [j < company-num ][
+    ifelse random 100 < 85 [
+      ask one-of mutexCompanyDistrict with [land-type != "company"][
+        set land-type "company" ;; 随机选择住所区域的patch变为公司
+      ]
+    ][
+      ;; 排除居住区的居住用地
+      let mutexResidenceDistrict patch-set residence-district with [
+        not member? self residences
+      ]
+
+      ask one-of mutexResidenceDistrict with [land-type != "company"] [
+        set land-type "company" ;; 随机选择住所区域的patch变为公司
+      ]
+
+    ]
+    set j j + 1
+  ]
+
+  ask n-of company-num mutexCompanyDistrict [
     set land-type "company"
   ]
   set companies patch-set patches with [land-type = "company"]
@@ -465,12 +505,244 @@ to setup-estates
     set pcolor red  ;; 通常用红色表示商业用地！！
     set num 0
   ]
+
+
+
+  ;; 赋值出口(不能出现在四个角上，否则生成不了边)
+  let exit1 one-of block1 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit2 one-of block2 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit3 one-of block3 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit4 one-of block4 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit5 one-of block5 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit6 one-of block6 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+
+  let exit7 one-of block7 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit8 one-of block8 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit9 one-of block9 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit10 one-of block10 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit11 one-of block11 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit12 one-of block12 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+
+  let exit13 one-of block13 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit14 one-of block14 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit15 one-of block15 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit16 one-of block16 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit17 one-of block17 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit18 one-of block18 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+
+  let exit19 one-of block19 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit20 one-of block20 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit21 one-of block21 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit22 one-of block22 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit23 one-of block23 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit24 one-of block24 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+
+  let exit25 one-of block25 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit26 one-of block26 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit27 one-of block27 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit28 one-of block28 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit29 one-of block29 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit30 one-of block30 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+
+  let exit31 one-of block31 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit32 one-of block32 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit33 one-of block33 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit34 one-of block34 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit35 one-of block35 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+  let exit36 one-of block36 with[
+    land-type = "idle-estate" and
+    not (count (neighbors4 with [land-type = "road"]) = 2 and count (neighbors4 with [land-type = "idle-estate"]) = 2) and
+    not (member? self residences) and
+    not (member? self companies)
+  ]
+
+  ;; 将每个街区的出口作为patch-set赋给exits
+  set exits (patch-set exit1 exit2 exit3 exit4 exit5 exit6 exit7 exit8 exit9 exit10 exit11 exit12
+    exit13 exit14 exit15 exit16 exit17 exit18 exit19 exit20 exit21 exit22 exit23 exit24
+    exit25 exit26 exit27 exit28 exit29 exit30 exit31 exit32 exit33 exit34 exit35 exit36)
+
+
 end
 
 ;; 由setup-map、setup-citizen、add-citizen调用，生成边
 to setup-graph
   let isTerminal? ([land-type] of patch-here = "residence" or [land-type] of patch-here = "company") ;;判断是否为终点 patch-here返回海龟下方的瓦片
-  create-edges-with vertices-on neighbors4 with [land-type = "road" or land-type = "land" or land-type = "residence" or land-type = "idle-estate"][ ;; neighbors4返回由4个相邻瓦片组成的主体集合
+  create-edges-with vertices-on neighbors4 with [land-type = "road" or land-type = "land" or land-type = "residence" or land-type = "company" or land-type = "idle-estate"][ ;; neighbors4返回由4个相邻瓦片组成的主体集合
     set shape "dotted"
     set bus-route? false
     ifelse (isTerminal?)[
@@ -516,12 +788,56 @@ to setup-citizen
   ;;  set residence
   ask patch-here [ set num num + 1 ] ;; 当前patch的num属性加1（num表示该住所的居民数）
   ;;  set company
-  let my-company one-of companies with [num < company-capacity] ;; 随机选择一个公司容量不满的公司作为该居民的公司
+
+  let this self
+
+  ;; 由北京市实际数据，距离其该居民家越远的公司，为该居民公司的概率越小
+  let my-company nobody
+  let myCompanyProbability random-float 100
+  ifelse myCompanyProbability <= 31.8 [
+    set my-company one-of companies in-radius 5 with [num < company-capacity]
+  ][
+    ifelse myCompanyProbability > 31.8 and myCompanyProbability <= 62.6 [
+      set my-company one-of companies in-radius 15 with [num < company-capacity and distance this > 5]
+    ][
+      ifelse myCompanyProbability > 62.6 and myCompanyProbability <= 82.9 [
+        set my-company one-of companies in-radius 25 with [num < company-capacity and distance this > 15]
+      ][
+        if myCompanyProbability > 82.9 and myCompanyProbability <= 100 [
+          set my-company one-of companies with [num < company-capacity and distance this > 25]
+        ]
+      ]
+    ]
+  ]
+
+  ;; let my-company one-of companies with [num < company-capacity] ;; 随机选择一个公司容量不满的公司作为该居民的公司
+
+
   if (my-company = nobody)[ ;; 若公司容量都满了
-    let new-company one-of company-district with [land-type = "idle-estate" or land-type = "land"] ;; 在闲置地产和公用用地找一块空地
+
+    let new-company nobody
+    ;; 由北京市实际数据，距离其该居民家越远的公司，为该居民公司的概率越小
+    ifelse myCompanyProbability <= 31.8 [
+      set new-company one-of patches in-radius 5 with [land-type = "idle-estate" or land-type = "land"]
+    ][
+      ifelse myCompanyProbability > 31.8 and myCompanyProbability <= 62.6 [
+       set new-company one-of patches in-radius 15 with [land-type = "idle-estate" or land-type = "land" and distance this > 5]
+      ][
+        ifelse myCompanyProbability > 62.6 and myCompanyProbability <= 82.9 [
+          set new-company one-of patches in-radius 25 with [land-type = "idle-estate" or land-type = "land" and distance this > 15]
+        ][
+          if myCompanyProbability > 82.9 and myCompanyProbability <= 100 [
+            set new-company one-of patches with [land-type = "idle-estate" or land-type = "land" and distance this > 25]
+          ]
+        ]
+      ]
+    ]
+
+    ;; let new-company one-of company-district with [land-type = "idle-estate" or land-type = "land"] ;; 在闲置地产和公用用地找一块空地
+
     ask new-company [
       set land-type "company"
-      set pcolor blue
+      set pcolor red
       set num 0
       sprout-vertices 1 [ ;;生成顶点
         setup-graph ;; 生成边
@@ -587,13 +903,18 @@ to setup-citizen
   ]
 
   ;; 设置年龄age
-  set age random-normal 35.7 19.43579173
-  if age < 0 [
-    set age 1
+  set age random-normal 37.47945205 11.32231351
+  if age < 15 [
+    set age 15
   ]
 
   ;; 设置职业
-  set occupation random 6 + 1
+  ifelse age >= 60 [
+    set occupation random 6 + 1
+  ][
+    set occupation random 5 + 1
+  ]
+
 
   ;; 设置性别
   set sex random 2
@@ -626,17 +947,14 @@ to setup-citizen
   set agentDestination company
 
   ;;  set trip-mode 居民出行行为选择
-  set-trip-mode
+  ;; set-trip-mode
 
   ;; 若选择乘出租车或顺风车（乘客）出行，等待一段时间匹配出租车或顺风车
-  if (trip-mode = 3 or trip-mode = 6)[
-        halt 2
-  ]
 
   ;; 若出行方式为地铁
-  if (trip-mode = 9) [
-    set subwayTransferCountdown 5
-  ]
+  ;; 模拟地铁换乘
+  set subwayTransferCountdown 5
+
 
   ;; 顺风车（司机）和顺风车（乘客）初始化上次呆过的地方为家
   set lastStayAt 0
@@ -648,6 +966,7 @@ to setup-citizen
   set mutex 1
 
 
+  set-trip-mode
 
   ;;  set path
   set path find-path residence company trip-mode ;; find-path是一个函数，输入三个参数：起点，终点，出行方式, 返回一个list是结点组成的路径
@@ -670,7 +989,13 @@ to setup-citizen
     show-turtle ;; 若没有这个语句，则视图上就没有turtle了
   ]
 
-  halt 2
+  ;; 设置出行时间
+  let departureTime ceiling(random-normal 120 60)
+  if departureTime < 2 [
+    set departureTime 2
+  ]
+  halt departureTime
+
 
   ;;  set shape
   ;;set-moving-shape
@@ -3031,8 +3356,8 @@ CHOOSER
 58
 cityShape
 cityShape
-"singleCenter" "fiveCenters" "nightCenters"
-0
+"singleCenter" "fiveCenters" "nineCenters"
+2
 
 @#$#@#$#@
 ## WHAT IS IT?
