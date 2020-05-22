@@ -68,8 +68,11 @@ globals[
   average-commuting-time-list
   average-bus-carring-number-list
 
-  ;; 城市形态(由GUI定义)
+  ;; 城市形态(由GUI下拉选择器定义)
   ;cityShape
+
+  ;; 是否有顺风车（由GUI开关定义）
+  ; hasRideSharing?
 
   ;; 街区
   block1
@@ -123,6 +126,78 @@ globals[
 
   ;;每个街区的出口
   exits
+
+
+
+  ;; 私家车、出租车、顺风车、公交车的污染排放
+  carCO
+  carNOx
+  carPM
+
+  taxiCO
+  taxiNOx
+  taxiPM
+
+  rideSharingCO
+  rideSharingNOx
+  rideSharingPM
+
+  busCO
+  busNOx
+  busPM
+
+
+  ;; 总排放
+  totalCO
+  totalNOx
+  totalPM
+
+  ;;折算系数Conversion Factor
+  carCOCF
+  carNOxCF
+  carPMCF
+
+  taxiCOCF
+  taxiNOxCF
+  taxiPMCF
+
+
+  rideSharingCOCF
+  rideSharingNOxCF
+  rideSharingPMCF
+
+  ;; 国四柴油公交车(Disel Vehicle)
+  busDVCOCF
+  busDVNOxCF
+  busDVPMCF
+
+  ;; 国五纯电公交车
+  busEVCOCF
+  busEVNOxCF
+  busEVPMCF
+
+
+  ;; 交通方式分担率(Contribution rate)
+
+  ;; 选择某种交通方式的人次
+  selectCarCount
+  selecttaxiCount
+  selectRideSharingDriverCount
+  selectRideSharingPassengerCount
+  selectSubwayCount
+  selectBikeCount
+  selectBusCount
+
+  ;; 分担率
+  carCR
+  taxiCR
+  rideSharingDriverCR
+  rideSharingPassengerCR
+  subwayCR
+  bikeCR
+  busCR
+
+
 ]
 
 citizens-own[
@@ -153,7 +228,7 @@ citizens-own[
 
   ;; 用于确定出行方式的效益模型
   income       ;; 实际收入值
-  has-car?     ;; 布尔型变量，是否有车 true有，false无， （用于编程）
+  has-car?     ;; 布尔型变量，是否有车 true有，false无 （用于编程）
   hasCar       ;; 是否有车， 1有，0无
   education    ;; 1 高中及以下， 2 大专，3 本科，4 硕士及以上
   age          ;; 实际年龄值
@@ -180,6 +255,9 @@ citizens-own[
 
   ;; 用于公交的换乘倒计时
   busTransferCountdown
+
+  ;; 乘公交车时的公交车类型，0表示柴油公交车，1表示纯电公交车
+  busType
 
 ]
 
@@ -277,6 +355,75 @@ to setup-globals
   set taxi-duration        2 ;;
   set buffer-distance      1.0 ;; 缓冲距离为一个砖块
   set money                0
+
+  ;; 初始化污染排放的折算系数
+  set carCOCF   3.77
+  set carNOxCF  0.582
+  set carPMCF   0.044
+
+
+  set taxiCOCF  2.25
+  set taxiNOxCF 0.095
+  set taxiPMCF  0.003
+
+
+  set rideSharingCOCF   3.77
+  set rideSharingNOxCF  0.582
+  set rideSharingPMCF   0.044
+
+  ;; 国四柴油公交车(Disel Vehicle)
+  set busDVCOCF         1.84
+  set busDVNOxCF        2.678
+  set busDVPMCF         0.106
+
+  ;; 国五纯电公交车
+  set busEVCOCF         0.368
+  set busEVNOxCF        1.8746
+  set busEVPMCF         0.0636
+
+
+  ;; 私家车、出租车、顺风车、公交车、总污染排放
+  set carCO  0
+  set carNOx 0
+  set carPM  0
+
+  set taxiCO 0
+  set taxiNOx 0
+  set taxiPM 0
+
+  set rideSharingCO 0
+  set rideSharingNOx 0
+  set rideSharingPM 0
+
+  set busCO 0
+  set busNOx 0
+  set busPM 0
+
+  set totalCO 0
+  set totalNOx 0
+  set totalPM 0
+
+
+  ;; 分担率计算相关
+  ;; 选择某种交通方式的人次
+  set selectCarCount 0
+  set selecttaxiCount 0
+  set selectRideSharingDriverCount 0
+  set selectRideSharingPassengerCount 0
+  set selectSubwayCount 0
+  set selectBikeCount 0
+  set selectBusCount 0
+
+  ;; 分担率
+  set carCR 0
+  set taxiCR 0
+  set rideSharingDriverCR 0
+  set rideSharingPassengerCR 0
+  set subwayCR 0
+  set bikeCR 0
+  set busCR 0
+
+
 end
 
 to setup-patches
@@ -1494,7 +1641,19 @@ to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
   ;; 出行方式：1 私家车 2 公交车 3 出租车 4 顺风车(乘客) 5 地铁 6 短途自行车 7 顺风车(司机)
 
   ;; 使用array保存效益，返回最大效益的下标
-  let benefitArr array:from-list n-values 7 [0]
+  let benefitArr nobody
+
+  ;; 有合乘的情景
+  ifelse hasRideSharing? = true [
+    set benefitArr array:from-list n-values 7 [0]
+  ][
+    ;; 无合乘的情景
+    set benefitArr array:from-list n-values 7 [0]
+    array:set benefitArr 3 -999999999999999
+    array:set benefitArr 6 -999999999999999
+  ]
+
+
 
   ;; 若没有上次的效益数组（即没有出现递归）
   ifelse lastArr = nobody [
@@ -1542,7 +1701,7 @@ to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
       set busM 9
     ]
 
-    array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM) + random-float 3
+    array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM) + random-float 2.5
 
     ;; 计算出租车效益
     let taxiS  1
@@ -1561,56 +1720,60 @@ to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
 
     array:set benefitArr 2 mu * taxiS / (lambda * taxiTC + omega * taxiM)
 
-    ;; 计算顺风车效益
-    ifelse has-car? = false [ ;; 若无车，则计算顺风车乘客的效益
-      let rideSharePassengerS  1
-      let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+    ;; 若为有合乘情景
+    if hasRideSharing? = true [
+      ;; 计算顺风车的效益
+      ifelse has-car? = false [ ;; 若无车，则计算顺风车乘客的效益
+        let rideSharePassengerS  1
+        let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
 
-      let rideSharePassengerM nobody
-      if dist > 0 and dist <= 12 [
-        set rideSharePassengerM 6.5 + dist * 1.3
-      ]
-      if dist > 12 and dist <= 40 [
-        set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
-      ]
-      if dist > 40 and dist <= 100 [
-        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
-      ]
-      if dist > 100 [
-        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
-      ]
+        let rideSharePassengerM nobody
+        if dist > 0 and dist <= 12 [
+          set rideSharePassengerM 6.5 + dist * 1.3
+        ]
+        if dist > 12 and dist <= 40 [
+          set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
+        ]
+        if dist > 40 and dist <= 100 [
+          set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
+        ]
+        if dist > 100 [
+          set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+        ]
 
-      array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
-    ][
-      ;; 若有车，计算乘客效益和司机效益
-      ;; 计算顺风车乘客效益
-      let rideSharePassengerS  1
-      let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+        array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
+      ][
+        ;; 若有车，计算乘客效益和司机效益
+        ;; 计算顺风车乘客效益
+        let rideSharePassengerS  1
+        let rideSharePassengerTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
 
-      let rideSharePassengerM nobody
-      if dist > 0 and dist <= 12 [
-        set rideSharePassengerM 6.5 + dist * 1.3
-      ]
-      if dist > 12 and dist <= 40 [
-        set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
-      ]
-      if dist > 40 and dist <= 100 [
-        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
-      ]
-      if dist > 100 [
-        set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
-      ]
+        let rideSharePassengerM nobody
+        if dist > 0 and dist <= 12 [
+          set rideSharePassengerM 6.5 + dist * 1.3
+        ]
+        if dist > 12 and dist <= 40 [
+          set rideSharePassengerM 6.5 + 12 * 1.3 + (dist - 12) * 1.6
+        ]
+        if dist > 40 and dist <= 100 [
+          set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + (dist - 40) * 1.3
+        ]
+        if dist > 100 [
+          set rideSharePassengerM 6.5 + 12 *　1.3 + 28 * 1.6 + 60 * 1.3 + (dist - 100) * 0.5
+        ]
 
-      array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
+        array:set benefitArr 3 mu * rideSharePassengerS / (lambda * rideSharePassengerTC + omega * rideSharePassengerM)
 
-      ;; 计算顺风车司机效益
-      let rideShareDriverS 1
-      let rideShareDriverTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
-      ;; 司机至少期望能接到一个乘客拼车，故其期望费用减去一个乘客的费用
-      let rideShareDriverM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime - rideSharePassengerM + 0.1 * rideSharePassengerM
+        ;; 计算顺风车司机效益
+        let rideShareDriverS 1
+        let rideShareDriverTC (5 / 26.31 + dist / 60 - dist / 26.31) * 1.3
+        ;; 司机至少期望能接到一个乘客拼车，故其期望费用减去一个乘客的费用
+        let rideShareDriverM dist * 7.5 * 7 / 100 + 4 * 2.2 * workTime - rideSharePassengerM + 0.1 * rideSharePassengerM
 
-      array:set benefitArr 6 mu * rideShareDriverS / (lambda * rideShareDriverTC + omega * rideShareDriverM)
+        array:set benefitArr 6 mu * rideShareDriverS / (lambda * rideShareDriverTC + omega * rideShareDriverM)
+      ]
     ]
+
 
     ;; 计算地铁效益
     let subwayS  1 - (1 / 1.2) ^ 5
@@ -1676,7 +1839,7 @@ to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
 
   ;; 若有不考虑的项，则设置索引对应的元素为很大的负数
   if setZeroMethod > 0 [
-    array:set benefitArr (setZeroMethod - 1) -1000000000000000
+    array:set benefitArr (setZeroMethod - 1) -10000000000000
   ]
   ;; debug
   ;; show benefitArr
@@ -1726,6 +1889,15 @@ to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
   set myTravelMethod (tempMaxIndex + 1)
   report myTravelMethod
 
+end
+
+;; 初始化乘坐公交车的类型
+to-report getBusType
+  ifelse random 100 <= 35 [
+    report 0
+  ][
+    report 1
+  ]
 end
 
 ;; 设置出行方式（可从这里修改代码）
@@ -1950,6 +2122,9 @@ to set-trip-mode
         set-max-speed busSpeed
 
         set lastTripMode 10
+
+        ;; 初始化公交车类型
+        set busType getBusType
       ]
 
     ][
@@ -2143,6 +2318,9 @@ to set-trip-mode
         set-max-speed busSpeed
 
         set lastTripMode 10
+
+        ;; 初始化公交车类型
+        set busType getBusType
       ]
 
     ]
@@ -2359,12 +2537,16 @@ to stay
   if (time = 1)[
 
 
+
+
     ;; 当为顺风车（司机）
     if (trip-mode = 7) [
       ;; 不用重新进行出行方式选择
       set-path
       set time time - 1
       set still? false
+
+
     ]
 
     ;; 当trip-mode不为3出租车（乘客）、6顺风车（乘客）和7 顺风车（司机）时，保持原程序逻辑
@@ -2758,6 +2940,9 @@ to stay
       ]
     ]
 
+     ;; 统计选择某种出行方式的人次
+     caltravelMethodCount
+
   ]
 
 
@@ -2906,9 +3091,15 @@ to change-traffic-light
   ]
 end
 
+
+
 ;;  command
 to go
   progress
+  ;; 计算各交通方式排放
+  calEmissions
+  ;; 计算各交通方式分担率
+  calCR
   ;;mouse-manager
   ;;change-traffic-light
   ;;record-data
@@ -3094,6 +3285,128 @@ end
 ;; Analysis
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; 污染排放计算
+to calEmissions
+  ;; 乘客
+  ask citizens [
+    ;; 私家车
+    ifelse trip-mode = 1 [
+      if time = 0 and still? = false [
+        set carCO carCO + speed * carCOCF
+        set carNOx carNOx + speed * carNOxCF
+        set carPM carPM + speed * carPMCF
+      ]
+    ][
+      ;; 出租车
+      ifelse trip-mode = 3 [
+        if time = 0 and still? = false [
+          set taxiCO taxiCO + speed * taxiCOCF
+          set taxiNOx taxiNOx + speed * taxiNOxCF
+          set taxiPM taxiPM + speed * taxiPMCF
+        ]
+      ][
+        ;; 顺风车（乘客）
+        ifelse trip-mode = 6  [
+          if time = 0 and still? = false [
+            set rideSharingCO rideSharingCO + speed * rideSharingCOCF
+            set rideSharingNOx rideSharingNOx + speed * rideSharingNOxCF
+            set rideSharingPM rideSharingPM + speed * rideSharingPMCF
+          ]
+        ][
+          ;; 顺风车（司机）
+          ifelse trip-mode = 7 [
+            if time = 0 and still? = false [
+              set rideSharingCO rideSharingCO + speed * rideSharingCOCF
+              set rideSharingNOx rideSharingNOx + speed * rideSharingNOxCF
+              set rideSharingPM rideSharingPM + speed * rideSharingPMCF
+            ]
+          ][
+            ;; 公交车
+            if trip-mode = 10 [
+              if time = 0 and still? = false [
+                ;; 若为柴油公交车
+                ifelse busType = 0 [
+                  set busCO busCO + (speed * busDVCOCF) / 79.2
+                  set busNOx busNOx + (speed * busDVNOxCF) / 79.2
+                  set busPM busPM + (speed * busDVPMCF) / 79.2
+                ][
+                  ;; 若为纯电公交车
+                  set busCO busCO + (speed * busEVCOCF) / 79.2
+                  set busNOx busNOx + (speed * busEVNOxCF) / 79.2
+                  set busPM busPM + (speed * busEVPMCF) / 79.2
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+
+  ;; 计算总排放
+  set totalCO carCO + taxiCO + rideSharingCO + busCO
+  set totalNOx carNOx + taxiNOx + rideSharingNOx + busNOx
+  set totalPM carPM + taxiPM + rideSharingPM + busPM
+end
+
+
+;; 各交通方式选择人次统计，由stay调用
+to caltravelMethodCount
+  ;; 私家车
+  ifelse trip-mode = 1 [
+    set selectCarCount selectCarCount + 1
+  ][
+    ;; 出租车
+    ifelse trip-mode = 3 and still? = false [
+      set selectTaxiCount selectTaxiCount + 1
+    ][
+      ;; 顺风车（乘客）
+      ifelse trip-mode = 6 and still? = false [
+        set selectRideSharingPassengerCount selectRideSharingPassengerCount + 1
+      ][
+        ;; 顺风车（司机）
+        ifelse trip-mode = 7 [
+          set selectRideSharingDriverCount selectRideSharingDriverCount + 1
+        ][
+          ;; 地铁
+          ifelse trip-mode = 8 [
+            set selectSubwayCount selectSubwayCount + 1
+          ][
+            ;; 短途自行车
+            ifelse trip-mode = 9 [
+              set selectBikeCount selectBikeCount + 1
+            ][
+              ;; 公交车
+              if trip-mode = 10 [
+                set selectBusCount selectBusCount + 1
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+end
+
+
+;; 计算分担率
+to calCR
+  let totalCount selectCarCount + selectTaxiCount + selectRideSharingPassengerCount
+  + selectRideSharingDriverCount + selectSubwayCount + selectBikeCount + selectBusCount
+
+  if totalCount != 0 [
+    set carCR selectCarCount / totalCount * 100
+    set taxiCR selectTaxiCount / totalCount * 100
+    set rideSharingPassengerCR selectRideSharingPassengerCount / totalCount * 100
+    set rideSharingDriverCR selectRideSharingDriverCount / totalCount * 100
+    set subwayCR selectSubwayCount / totalCount * 100
+    set bikeCR selectBikeCount / totalCount * 100
+    set busCR selectBusCount / totalCount * 100
+  ]
+
+end
+
+
 to record-data
   ;;  taxi
   if count taxies > 0 [
@@ -3276,10 +3589,10 @@ ticks
 30.0
 
 BUTTON
-46
-179
-114
-212
+42
+229
+110
+262
 NIL
 setup
 NIL
@@ -3293,10 +3606,10 @@ NIL
 1
 
 BUTTON
-46
-224
-114
-257
+42
+274
+110
+307
 NIL
 go
 T
@@ -3310,10 +3623,10 @@ NIL
 1
 
 BUTTON
-40
-268
-121
-301
+36
+318
+117
+351
 go once
 go
 NIL
@@ -3341,60 +3654,279 @@ initial-people-num
 NIL
 HORIZONTAL
 
-BUTTON
-45
-465
-119
-498
-Add taxi
-add-taxi
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 MONITOR
-6
-55
-122
-100
+26
+508
+142
+553
 Number of taxies
 count taxies
 17
 1
 11
 
-BUTTON
-31
-508
-132
-541
-Add citizen
-add-citizen
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 CHOOSER
-730
-13
-869
-58
+6
+60
+164
+106
 cityShape
 cityShape
 "singleCenter" "fiveCenters" "nineCenters"
 0
+
+MONITOR
+732
+12
+870
+58
+NIL
+carCO
+17
+1
+11
+
+MONITOR
+870
+12
+998
+58
+NIL
+carNOx
+17
+1
+11
+
+MONITOR
+998
+12
+1129
+58
+NIL
+carPM
+17
+1
+11
+
+MONITOR
+732
+83
+871
+129
+NIL
+taxiCO
+17
+1
+11
+
+MONITOR
+870
+83
+1000
+129
+NIL
+taxiNOx
+17
+1
+11
+
+MONITOR
+1000
+84
+1129
+130
+NIL
+taxiPM
+17
+1
+11
+
+MONITOR
+731
+164
+873
+210
+NIL
+rideSharingCO
+17
+1
+11
+
+MONITOR
+873
+164
+1001
+210
+NIL
+rideSharingNOx
+17
+1
+11
+
+MONITOR
+1000
+164
+1130
+210
+NIL
+rideSharingPM
+17
+1
+11
+
+MONITOR
+732
+245
+872
+291
+NIL
+busCO
+17
+1
+11
+
+MONITOR
+872
+246
+1001
+292
+NIL
+busNOx
+17
+1
+11
+
+MONITOR
+1001
+246
+1132
+292
+NIL
+busPM
+17
+1
+11
+
+MONITOR
+732
+319
+874
+365
+NIL
+totalCO
+17
+1
+11
+
+MONITOR
+874
+319
+1002
+365
+NIL
+totalNOx
+17
+1
+11
+
+MONITOR
+1002
+320
+1137
+366
+NIL
+totalPM
+17
+1
+11
+
+MONITOR
+732
+387
+840
+433
+carCR(%)
+carCR
+17
+1
+11
+
+MONITOR
+840
+388
+972
+434
+taxiCR(%)
+taxiCR
+17
+1
+11
+
+MONITOR
+972
+388
+1138
+434
+rideSharingDriverCR(%)
+rideSharingDriverCR
+17
+1
+11
+
+MONITOR
+732
+432
+918
+478
+rideSharingPassengerCR(%)
+rideSharingPassengerCR
+17
+1
+11
+
+MONITOR
+918
+433
+1137
+479
+subwayCR(%)
+subwayCR
+17
+1
+11
+
+MONITOR
+732
+478
+919
+524
+bikeCR(%)
+bikeCR
+17
+1
+11
+
+MONITOR
+919
+478
+1137
+524
+busCR(%)
+busCR
+17
+1
+11
+
+SWITCH
+6
+126
+164
+160
+hasRideSharing?
+hasRideSharing?
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
