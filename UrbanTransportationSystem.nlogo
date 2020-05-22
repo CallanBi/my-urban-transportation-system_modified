@@ -39,6 +39,7 @@ globals[
 
   subwaySpeed              ;;  地铁的速度
   bikeSpeed                ;;  短途自行车的速度
+  busSpeed                 ;;  公交车的速度
 
   acceleration
   deceleration
@@ -177,6 +178,9 @@ citizens-own[
   ;; 用于地铁的换乘倒计时
   subwayTransferCountdown
 
+  ;; 用于公交的换乘倒计时
+  busTransferCountdown
+
 ]
 
 ;; 出租车
@@ -264,6 +268,7 @@ to setup-globals
 
   set subwaySpeed          0.583333333333333 ;; 地铁速度为35km/h
   set bikeSpeed            0.16              ;; 自行车速度为10km/h
+  set busSpeed             0.2424028         ;; 公交车车速为14.544168km/h
 
   set acceleration         0.25
   set deceleration         0.5
@@ -922,7 +927,7 @@ to setup-citizen
 
 
   ;; 设置工作时间(h为单位)
-  set workTime random-normal 8 2
+  set workTime random-normal 8 1
 
   ;; 设置顺风车（司机）相关
   set isOrdered?  false
@@ -954,6 +959,9 @@ to setup-citizen
   ;; 若出行方式为地铁
   ;; 模拟地铁换乘
   set subwayTransferCountdown 5
+
+  ;; 模拟公交换乘
+  set busTransferCountdown 1
 
 
   ;; 顺风车（司机）和顺风车（乘客）初始化上次呆过的地方为家
@@ -990,7 +998,7 @@ to setup-citizen
   ]
 
   ;; 设置出行时间
-  let departureTime ceiling(random-normal 120 60)
+  let departureTime ceiling(random-normal 120 30)
   if departureTime < 2 [
     set departureTime 2
   ]
@@ -1044,7 +1052,7 @@ end
 ;;  taxi-related 返回一个taxi主体，若没找到就返回null, 由citizen调用
 to-report find-taxi
   let this             self
-  let available-taxies ((taxies with [is-ordered? = false and is-occupied? = false]) in-radius 50) ;; 在taxi-detect-distance范围内找一个没被预定且没被占用的taxi
+  let available-taxies ((taxies with [is-ordered? = false and is-occupied? = false]) in-radius 10) ;; 在taxi-detect-distance范围内找一个没被预定且没被占用的taxi
   ifelse count available-taxies > 0 [
     report min-one-of available-taxies [distance this] ;; 返回距离最近的出租车
   ][
@@ -1355,7 +1363,7 @@ end
 
 ;; 控制居民出行和工作、休息时间，控制私家车、出租车休息时间（set-duration是在到达目的地调用的）
 to set-duration
-  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3 or trip-mode = 6 or trip-mode = 8 or trip-mode = 9)[           ;; 若主体为居民
+  ifelse (trip-mode = 1 or trip-mode = 2 or trip-mode = 3 or trip-mode = 6 or trip-mode = 8 or trip-mode = 9 or trip-mode = 10)[           ;; 若主体为居民
     ;;  record 处理记录数据
     ifelse last-commuting-time = nobody [                             ;; 若上次保存的通勤时间为null（尚未初始化）
       set last-commuting-time commuting-counter                       ;; 设置上次保存的通勤时间为通勤计次
@@ -1466,9 +1474,17 @@ to set-moving-shape
   if trip-mode = 9 [
     ask map-link-neighbors [
       set shape "bike"
-      set color black
+      set color black ;;
     ]
 
+  ]
+
+  ;; 若为公交
+  if trip-mode = 10 [
+    ask map-link-neighbors [
+      set shape "bus"
+      set color lime ;; 石灰色
+    ]
   ]
 
 end
@@ -1526,7 +1542,7 @@ to-report getTravelMethod [dist myWorkTime setZeroMethod lastArr]
       set busM 9
     ]
 
-    array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM)
+    array:set benefitArr 1 mu * busS / (lambda * busTC + omega * busM) + random-float 3
 
     ;; 计算出租车效益
     let taxiS  1
@@ -1902,7 +1918,7 @@ to set-trip-mode
         ][;; 若没找到顺风车
           show "exception!! not found ride sharing driver"
 
-          set trip-mode 2 ;; 设置出行方式为乘公交车
+          set trip-mode 2 ;; 设置出行方式为步行
                           ;;show ("not found Driver")
           set-max-speed person-speed
 
@@ -1930,10 +1946,10 @@ to set-trip-mode
 
       ;; todo 待完善，完成各个主体开发后（地铁和短途自行车）
       if travelMethod = 2 [
-        set trip-mode 2 ;; 设置出行方式为乘公交车
-        set-max-speed person-speed
+        set trip-mode 10 ;; 设置出行方式为乘公交车
+        set-max-speed busSpeed
 
-        set lastTripMode 2
+        set lastTripMode 10
       ]
 
     ][
@@ -2121,12 +2137,12 @@ to set-trip-mode
         set lastTripMode 9
       ]
 
-      ;; todo 待完善，完成各个主体开发后（地铁和短途自行车）
+      ;; 若为公交车
       if travelMethod = 2  [
-        set trip-mode 2 ;; 设置出行方式为乘公交车
-        set-max-speed person-speed
+        set trip-mode 10 ;; 设置出行方式为乘公交车
+        set-max-speed busSpeed
 
-        set lastTripMode 2
+        set lastTripMode 10
       ]
 
     ]
@@ -2320,6 +2336,21 @@ to transferSubway
 end
 
 
+to transferBus
+  if ([intersection?] of patch-here = true)[ ;; 若该处为交叉口
+    ifelse busTransferCountdown > 0 [
+      set still? true
+      set busTransferCountdown busTransferCountdown - 1
+    ][
+      set still? false
+      set busTransferCountdown 1
+    ]
+
+
+  ]
+end
+
+
 
 ;; stay:由citizens bus taxi调用,当still?=true时
 ;; todo: 顺风车绑定逻辑
@@ -2337,7 +2368,7 @@ to stay
     ]
 
     ;; 当trip-mode不为3出租车（乘客）、6顺风车（乘客）和7 顺风车（司机）时，保持原程序逻辑
-    if (trip-mode = 1 or trip-mode = 2 or trip-mode = 4 or trip-mode = 5 or trip-mode = 8 or trip-mode = 9) [
+    if (trip-mode = 1 or trip-mode = 2 or trip-mode = 4 or trip-mode = 5 or trip-mode = 8 or trip-mode = 9 or trip-mode = 10) [
       ;; set path
       set-trip-mode
       set-path
@@ -2805,6 +2836,12 @@ to progress
     if trip-mode = 8 [
       ;; 在交叉口模拟换乘
       transferSubWay
+    ]
+
+    ;; 若为公交
+    if trip-mode = 10 [
+      ;; 在交叉口模拟换乘
+      transferBus
     ]
 
     if (count bus-link-neighbors = 0)[ ;; 当旁边没有公车时
@@ -3357,7 +3394,7 @@ CHOOSER
 cityShape
 cityShape
 "singleCenter" "fiveCenters" "nineCenters"
-2
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
