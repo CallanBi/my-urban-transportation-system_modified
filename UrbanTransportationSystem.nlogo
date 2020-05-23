@@ -24,6 +24,8 @@ globals[
   district-width ;; 区域宽度
   district-length ;; 区域长度
 ;  initial-people-num 由滑块控制
+
+
   company-capacity ;; 一个公司的人数
   residence-capacity ;; 一个住所的人数
   bus-capacity
@@ -1429,59 +1431,8 @@ to set-speed
   let controller      self
   let this            one-of map-link-neighbors ;; this为连接mapping-citizen结点的结点.如：(citizen 1253): (mapping-citizen 1254)
   ;; show this
-  let my-taxi         self   ;;taxi和controller都是当前的主体
-  let turtles-ahead   nobody ;; 前面的主体
-  let vehicles-ahead  nobody ;; 前面的车队
-  let jam-ahead       nobody ;; 前面的堵塞
-  let nearest-vehicle nobody ;; 最近的车辆
   let safe-distance   100    ;; positive infinity  安全距离，初始化时为正无穷
 
-  if (count taxi-link-neighbors > 0)[ ;; 若有出租车
-    set my-taxi       one-of [map-link-neighbors] of one-of taxi-link-neighbors ;; 从taxi-link的主体中选出任意一个的任意一个map-link-neighbor
-  ]
-
-  ;; todo:顺风车
-
-  ifelse patch-ahead 1 != nobody [ ;; 若不是边界（patch-ahead: 返回沿调用海龟当前方向前方给定距离处的单个瓦片。如果超出世界范围，瓦片不存在，则返回nobody）
-    set turtles-ahead (turtle-set (other turtles-here) (turtles-on patch-ahead 1)) ;; 将前方patch上的所有海龟和当前主体所在地块的除了当前主体的其他海龟作为一个turtle set (turtle-set value1 value2 ...为一个并集的关系，参数可以为多个)
-    with [who != [who] of this and who != [who] of my-taxi]  ;; not my mapping vehicle or my taxi
-  ][ ;; 若为边界
-    set turtles-ahead turtle-set (other turtles-here) ;; 将当前主体之外的其他海龟作为一个turtle-set
-    with [who != [who] of this and who != [who] of my-taxi]
-  ]
-
-  ;;;
-  ;;;if turtles-ahead != nobody [ ;; 若前方没有海龟
-  ;;;  set vehicles-ahead turtles-ahead with[
-  ;;;    (shape = "car top" or shape = "van top" or shape = "bus")  ;; private car, taxi and bus ;; 设置vehicle-ahead为前方的私家车、出租车和公交车
-  ;;;  ]
-  ;;; ]
-  ;;; ifelse (vehicles-ahead != nobody and count vehicles-ahead > 0 and any? vehicles-ahead with [distance this = 0])[ ;; 若前方有车，且存在与当前主体距离为0的海龟 （distance agent/patch：返回本主体与给定海龟或瓦片的距离）
-  ;;; ifelse speed != 0 [  ;; 若当前主体速度不为0
-  ;;;    set speed random-float speed ;; 设置速度小于原来速度(random-float number:如果number为正，返回大于等于0、小于number的一个随机浮点数) 该语句意思为lim_(distance->0) speed = 0
-  ;;;  ][ ;; 若为0
-  ;;;    set speed random-float person-speed  ;; restart 设置速度为人的速度
-  ;;;  ]
-  ;;;][;; 若不存在与当前主体距离为0的海龟
-  ;;;  if (vehicles-ahead != nobody and count vehicles-ahead > 0) [  ;; 若前方有车
-  ;;;    set jam-ahead vehicles-ahead with[ ;; 设置jam-ahead为前方车队集合，这个集合要满足：
-  ;;;      abs (abs ([heading] of this - towards this) - 180) < 1 and  ;; in front of self 该车在主体前方（towards agent 返回从本主体到给定主体的方向）
-  ;;;      abs (heading - [heading] of this) < 1                       ;; same direction   且属于同一方向
-  ;;;    ]
-  ;;;    if (jam-ahead != nobody and count jam-ahead > 0) [ ;; 若找到该jam-ahead车队集合
-  ;;;      set nearest-vehicle min-one-of jam-ahead [distance this] ;; 找到jam-ahead里距离当前主体最近的车辆
-  ;;;      set safe-distance distance nearest-vehicle ;; 设置安全距离为jam-ahead里前方最近的车辆的距离
-  ;;;    ]
-  ;;;  ]
-  ;;;
-
-    ;;  slow down before the red light
-    ;;;if (patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 = 19)[ ;; 若前方为红灯
-    ;;;  let red-light-distance (distance patch-ahead 1) ;; 计算前方红灯的距离
-    ;;;  if (red-light-distance < safe-distance)[ ;; 若小于安全距离
-    ;;;    set safe-distance red-light-distance ;; 则设置安全距离为前方红灯距离
-    ;;;  ]
-    ;;;]
 
     ifelse safe-distance < buffer-distance [ ;; 若安全距离小于默认安全车距
       set speed 0 ;; 立即停止
@@ -2490,14 +2441,6 @@ end
 
 ;;  basic behavior :
 ;; 停等行为
-to watch-traffic-light
-  if ([land-type] of patch-here = "road" and [pcolor] of patch-here = 19)[ ;; 若为红灯则停止
-    halt 0
-  ]
-  if ([land-type] of patch-here = "road" and [pcolor] of patch-here = 69)[ ;; 若为绿灯则启动
-    set still? false
-  ]
-end
 
 to transferSubway
   if ([intersection?] of patch-here = true)[ ;; 若该处为交叉口
@@ -3079,17 +3022,6 @@ to progress
   ]
 end
 
-to change-traffic-light
-  ifelse (traffic-light-count = 0)[
-    let green-patches patches with [pcolor = 69]
-    let red-patches   patches with [pcolor = 19]
-    ask green-patches [set pcolor 19]
-    ask red-patches   [set pcolor 69]
-    set traffic-light-count traffic-light-cycle
-  ][
-    set traffic-light-count (traffic-light-count - 1)
-  ]
-end
 
 
 
@@ -3100,10 +3032,6 @@ to go
   calEmissions
   ;; 计算各交通方式分担率
   calCR
-  ;;mouse-manager
-  ;;change-traffic-light
-  ;;record-data
-  ;;update-plot
   tick
 end
 
@@ -3252,34 +3180,8 @@ to add-bus-stop
   ]
 end
 
-;; 鼠标点击事件判断
-to-report mouse-clicked?
-  report (mouse-was-down? = true and not mouse-down?)
-end
 
-;; 鼠标点击事件回调函数
-to mouse-manager
-  let mouse-is-down? mouse-down?
-  if mouse-clicked? [
-    let patch-clicked patch round mouse-xcor round mouse-ycor
-    print "clicked!"  ;; debug
-    if ([land-type] of patch-clicked = "road")[
-      ifelse (not is-patch? global-origin-station) [
-        set global-origin-station patch-clicked
-        print patch-clicked  ;; log
-      ][
-        if (patch-clicked != global-origin-station)[
-          set global-terminal-station patch-clicked
-          print patch-clicked  ;; log
-          add-bus-stop
-          set global-origin-station   nobody
-          set global-terminal-station nobody
-        ]
-      ]
-    ]
-  ]
-  set mouse-was-down? mouse-is-down?
-end
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Analysis
@@ -3340,6 +3242,15 @@ to calEmissions
           ]
         ]
       ]
+    ]
+  ]
+
+  ;; 出租车在路上且有预定时计算排放（即接到订单时的绕路里程也算）
+  ask taxies [
+    if time = 0 and still? = false and is-ordered? = true and is-occupied? = false [
+      set taxiCO taxiCO + speed * taxiCOCF
+      set taxiNOx taxiNOx + speed * taxiNOxCF
+      set taxiPM taxiPM + speed * taxiPMCF
     ]
   ]
 
@@ -3407,79 +3318,98 @@ to calCR
 end
 
 
-to record-data
-  ;;  taxi
-  if count taxies > 0 [
-    let average-taxi-carring-rate ((count taxies with [is-occupied? = true] + 0.0) / (count taxies) * 100)
-    ifelse is-list? average-taxi-carring-rate-list [
-      set average-taxi-carring-rate-list
-      fput average-taxi-carring-rate average-taxi-carring-rate-list
-    ][
-      set average-taxi-carring-rate-list
-      (list average-taxi-carring-rate)
-    ]
-  ]
+;; 仿真实验报告器
 
-  ;;  bus
-  if count buses > 0[
-    let average-bus-carring-number mean [count my-bus-links] of buses
-    ifelse is-list? average-bus-carring-number-list [
-      set average-bus-carring-number-list
-      fput average-bus-carring-number average-bus-carring-number-list
-    ][
-      set average-bus-carring-number-list
-      (list average-bus-carring-number)
-    ]
-  ]
-
-  ;;  citizen
-  if (all? citizens [last-commuting-time != nobody])[
-    let average-commuting-time mean [last-commuting-time] of citizens
-    ifelse is-list? average-commuting-time-list [
-      set average-commuting-time-list
-      fput average-commuting-time average-commuting-time-list
-    ][
-      set average-commuting-time-list
-      (list average-commuting-time)
-    ]
-  ]
+to-report getCarCO
+ report carCO
 end
 
-to update-plot
-  if (ticks mod 10 = 0) [
-    ;;  taxi
-    if is-list? average-taxi-carring-rate-list and (length average-taxi-carring-rate-list >= 100) [
-      set-current-plot "Average Taxi Carring Rate"
-      plot mean sublist average-taxi-carring-rate-list 0 100
-    ]
-    ;;  bus
-    if is-list? average-bus-carring-number-list and (length average-bus-carring-number-list >= 100) [
-      set-current-plot "Average Bus Carring Number"
-      plot mean sublist average-bus-carring-number-list 0 100
-    ]
-    ;;  citizen
-    if is-list? average-commuting-time-list and (length average-commuting-time-list >= 100) [
-      set-current-plot "Average Commuting Time"
-      plot mean sublist average-commuting-time-list 0 100
-    ]
-  ]
+to-report getCarNOx
+  report carNOx
 end
 
-to-report analyze-citizen
-  ifelse is-list? average-commuting-time-list [
-    report mean average-commuting-time-list
-  ][
-    report 0
-  ]
+to-report getCarPM
+  report carPM
 end
 
-to-report analyze-taxi
-  ifelse is-list? average-taxi-carring-rate-list [
-    report mean average-taxi-carring-rate-list
-  ][
-    report 0
-  ]
+to-report getTaxiCO
+  report taxiCO
 end
+
+to-report getTaxiNOx
+  report taxiNOx
+end
+
+to-report getTaxiPM
+  report taxiPM
+end
+
+to-report getRideSharingCO
+  report rideSharingCO
+end
+
+to-report getRideSharingNOx
+  report rideSharingNOx
+end
+
+to-report getRideSharingPM
+  report rideSharingPM
+end
+
+to-report getBusCO
+  report busCO
+end
+
+to-report getBusNOx
+  report busNOx
+end
+
+to-report getBusPM
+  report busPM
+end
+
+to-report getTotalCO
+  report totalCO
+end
+
+to-report getTotalNOx
+  report totalNOx
+end
+
+to-report getTotalPM
+  report totalPM
+end
+
+to-report getCarCR
+  report carCR
+end
+
+to-report getTaxiCR
+  report taxiCR
+end
+
+to-report getRideSharingDriverCR
+  report rideSharingDriverCR
+end
+
+to-report getRideSharingPassengerCR
+  report rideSharingPassengerCR
+end
+
+to-report getSubwayCR
+  report subwayCR
+end
+
+to-report getBikeCR
+  report bikeCR
+end
+
+to-report getBusCR
+  report busCR
+end
+
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Algorithm
@@ -3560,6 +3490,8 @@ to-report find-path [source target mode]
   ]
   report path-list ;; 返回这个path-list，即结点组成的路径,数据结构为list
 end
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 171
@@ -3640,15 +3572,15 @@ NIL
 1
 
 SLIDER
-3
+4
 10
-163
-43
+166
+44
 initial-people-num
 initial-people-num
 0
-200
-200.0
+1000
+300.0
 1
 1
 NIL
@@ -3669,7 +3601,7 @@ CHOOSER
 6
 60
 164
-106
+105
 cityShape
 cityShape
 "singleCenter" "fiveCenters" "nineCenters"
@@ -3679,7 +3611,7 @@ MONITOR
 732
 12
 870
-58
+57
 NIL
 carCO
 17
@@ -3690,7 +3622,7 @@ MONITOR
 870
 12
 998
-58
+57
 NIL
 carNOx
 17
@@ -3701,7 +3633,7 @@ MONITOR
 998
 12
 1129
-58
+57
 NIL
 carPM
 17
@@ -3712,7 +3644,7 @@ MONITOR
 732
 83
 871
-129
+128
 NIL
 taxiCO
 17
@@ -3723,7 +3655,7 @@ MONITOR
 870
 83
 1000
-129
+128
 NIL
 taxiNOx
 17
@@ -3734,7 +3666,7 @@ MONITOR
 1000
 84
 1129
-130
+129
 NIL
 taxiPM
 17
@@ -3745,7 +3677,7 @@ MONITOR
 731
 164
 873
-210
+209
 NIL
 rideSharingCO
 17
@@ -3756,7 +3688,7 @@ MONITOR
 873
 164
 1001
-210
+209
 NIL
 rideSharingNOx
 17
@@ -3767,7 +3699,7 @@ MONITOR
 1000
 164
 1130
-210
+209
 NIL
 rideSharingPM
 17
@@ -3778,7 +3710,7 @@ MONITOR
 732
 245
 872
-291
+290
 NIL
 busCO
 17
@@ -3789,7 +3721,7 @@ MONITOR
 872
 246
 1001
-292
+291
 NIL
 busNOx
 17
@@ -3800,7 +3732,7 @@ MONITOR
 1001
 246
 1132
-292
+291
 NIL
 busPM
 17
@@ -3811,7 +3743,7 @@ MONITOR
 732
 319
 874
-365
+364
 NIL
 totalCO
 17
@@ -3822,7 +3754,7 @@ MONITOR
 874
 319
 1002
-365
+364
 NIL
 totalNOx
 17
@@ -3833,7 +3765,7 @@ MONITOR
 1002
 320
 1137
-366
+365
 NIL
 totalPM
 17
@@ -3844,7 +3776,7 @@ MONITOR
 732
 387
 840
-433
+432
 carCR(%)
 carCR
 17
@@ -3855,7 +3787,7 @@ MONITOR
 840
 388
 972
-434
+433
 taxiCR(%)
 taxiCR
 17
@@ -3866,7 +3798,7 @@ MONITOR
 972
 388
 1138
-434
+433
 rideSharingDriverCR(%)
 rideSharingDriverCR
 17
@@ -3877,7 +3809,7 @@ MONITOR
 732
 432
 918
-478
+477
 rideSharingPassengerCR(%)
 rideSharingPassengerCR
 17
@@ -3888,7 +3820,7 @@ MONITOR
 918
 433
 1137
-479
+478
 subwayCR(%)
 subwayCR
 17
@@ -3899,7 +3831,7 @@ MONITOR
 732
 478
 919
-524
+523
 bikeCR(%)
 bikeCR
 17
@@ -3910,7 +3842,7 @@ MONITOR
 919
 478
 1137
-524
+523
 busCR(%)
 busCR
 17
@@ -3921,88 +3853,14 @@ SWITCH
 6
 126
 164
-160
+159
 hasRideSharing?
 hasRideSharing?
-0
+1
 1
 -1000
 
 @#$#@#$#@
-## WHAT IS IT?
-
-This is an urban transportation model simulating citizens' commuting by private cars, taxies and buses. It contains four subdivision systems: citizens, taxies, buses and traffic lights. User can manipulate this transportation system by setting the number of citizens, regulating the number of taxies and creating bus lines. This model simulates the real world transportation system which reveals the importance of public traffic.
-
-## HOW IT WORKS
-
-The whole city is presented as grid. There are different kinds of patches: land, road, bus-stop, residence, company and idle-estate. The roads, residences and companies have their corresponding vertices which logically form a graph.
-
-Every citizen has its own residence and company. The citizen's goal is to move back and forth between his residence and his company. If the citizen has a private car, then he commutes by his own car. Otherwise, he either takes taxi if there exists idle one nearby or takes bus. The shortest path from origin to destination will be calculated using Dijkstra Algorithm by the program itself.
-
-All vehicles are running in the two-lane roads and abide by the traffic lights. Vehicles will decelerate when there are other vehicles or red light ahead, and accelerate until reaching the max speed in other situations.
-
-Taxies travel randomly from house to house when idle and buses are driven alongside their bus lines continuously. One taxi can only carry one passenger, meanwhile, one bus can carry up to 4 passengers. Traffic lights switch periodically.
-
-Whether citizens can reach the destination as soon as possible depends on the reasonable planning of public traffic and fewer traffic congestion. User can learn about the utilization of public traffic (taxies and buses) and average commuting time by observing graphical data.
-
-### Patch Color
-Land        -- deeper brown
-Idle-estate -- deep brown
-Residence   -- yellow
-Company     -- blue
-Road        -- light gray
-Red light   -- red
-Green light -- green
-
-## HOW TO USE IT
-
-Whole system will be initialized after SETUP button is pressed. After that, user can press the GO button to start the system. 
-
-Taxies can be added by ADD TAXI button. Bus lines can be created by clicking two different road patches when system is running.
-
-### Plots
-
-Average Taxi Carrying Rate  -- displays the proportion of taxies with passenger over time
-Average Bus Carrying Number -- displays the average number of passengers on each bus over time
-Average Commuting Time      -- displays the average time of each commuting
-
-## THINGS TO NOTICE
-
-Bus lines and taxies have to be added cautiously in case traffic jams happen frequently.
-
-## THINGS TO TRY
-
-User should schedule public traffic so that citizens don't have to walk all the way to the destination which is pretty inefficient and empty loading rate should be reduced to avoid redundant vehicles causing traffic jams.
-
-## EXTENDING THE MODEL
-
-### Vehicle Detection
-
-Limited by the implementation and language capacity, detecting vehicles ahead has low-precision.
-
-### Collision Detection
-
-Since agents don't take up space in NetLogo but their images do, a better way to avoid traffic collision, in the format of image overlapping, is in demand.
-
-### Practical Two-Lane Road
-
-The implementation of two-lane road can be polished, like traffic lights of two directions and integrated turning animation.
-
-### Variety
-
-More vehicle types and terrain can be included.
-
-## NETLOGO FEATURES
-
-Citizens in this model use both utility-based cognition and goal-based cognition.
-
-## RELATED MODELS
-
-- "Traffic Grid": a model of traffic moving in a city grid.
-
-## CREDITS AND REFERENCES
-
-Github: [https://github.com/Luminoid/urban-transportation-system](https://github.com/Luminoid/urban-transportation-system)
 @#$#@#$#@
 default
 true
@@ -4433,34 +4291,76 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="transportation experiment" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup
-repeat 6 [add-taxi]</setup>
+  <experiment name="transportation experiment" repetitions="50" runMetricsEveryStep="false">
+    <setup>setup</setup>
     <go>go</go>
-    <timeLimit steps="6000"/>
-    <metric>analyze-citizen</metric>
-    <metric>analyze-taxi</metric>
-    <enumeratedValueSet variable="initial-people-num">
-      <value value="20"/>
-      <value value="200"/>
+    <timeLimit steps="1440"/>
+    <metric>getCarCO</metric>
+    <metric>getCarNOx</metric>
+    <metric>getCarPM</metric>
+    <metric>getTaxiCO</metric>
+    <metric>getTaxiNOx</metric>
+    <metric>getTaxiPM</metric>
+    <metric>getRideSharingCO</metric>
+    <metric>getRideSharingNOx</metric>
+    <metric>getRideSharingPM</metric>
+    <metric>getBusCO</metric>
+    <metric>getBusNOx</metric>
+    <metric>getBusPM</metric>
+    <metric>getTotalCO</metric>
+    <metric>getTotalNOx</metric>
+    <metric>getTotalPM</metric>
+    <metric>getCarCR</metric>
+    <metric>getTaxiCR</metric>
+    <metric>getRideSharingDriverCR</metric>
+    <metric>getRideSharingPassengerCR</metric>
+    <metric>getSubwayCR</metric>
+    <metric>getBikeCR</metric>
+    <metric>getBusCR</metric>
+    <enumeratedValueSet variable="hasRideSharing?">
+      <value value="false"/>
+      <value value="true"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="taxi-detect-distance">
-      <value value="4"/>
-      <value value="8"/>
-      <value value="12"/>
-      <value value="16"/>
-      <value value="20"/>
+    <enumeratedValueSet variable="cityShape">
+      <value value="&quot;singleCenter&quot;"/>
+      <value value="&quot;fiveCenters&quot;"/>
+      <value value="&quot;nineCenters&quot;"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="has-car-ratio">
-      <value value="0"/>
-      <value value="100"/>
+  </experiment>
+  <experiment name="transportation experiment" repetitions="100" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="1440"/>
+    <metric>carCO</metric>
+    <metric>carNOx</metric>
+    <metric>carPM</metric>
+    <metric>taxiCO</metric>
+    <metric>taxiNOx</metric>
+    <metric>taxiPM</metric>
+    <metric>rideSharingCO</metric>
+    <metric>rideSharingNOx</metric>
+    <metric>rideSharingPM</metric>
+    <metric>busCO</metric>
+    <metric>busNOx</metric>
+    <metric>busPM</metric>
+    <metric>totalCO</metric>
+    <metric>totalNOx</metric>
+    <metric>totalPM</metric>
+    <metric>carCR</metric>
+    <metric>taxiCR</metric>
+    <metric>rideSharingDriverCR</metric>
+    <metric>rideSharingPassengerCR</metric>
+    <metric>subwayCR</metric>
+    <metric>bikeCR</metric>
+    <metric>busCR</metric>
+    <enumeratedValueSet variable="hasRideSharing?">
+      <value value="false"/>
+      <value value="true"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="traffic-light-cycle">
-      <value value="4"/>
-      <value value="8"/>
-      <value value="12"/>
-      <value value="16"/>
-      <value value="20"/>
+    <enumeratedValueSet variable="cityShape">
+      <value value="&quot;singleCenter&quot;"/>
+      <value value="&quot;fiveCenters&quot;"/>
+      <value value="&quot;nineCenters&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
